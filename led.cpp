@@ -134,7 +134,7 @@ void LED::clear() {
 */
 void LED::fbDisplay() {
   for (uint8_t pos = 0; pos < DIGITS; pos++)
-    this->sendSPI(DIGITS - pos - 1, fbData[pos]);
+    this->sendSPI(DIGITS - pos, fbData[pos]);
 }
 
 /**

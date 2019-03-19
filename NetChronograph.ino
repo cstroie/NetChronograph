@@ -254,5 +254,5 @@ void loop() {
   ArduinoOTA.handle();
   yield();
 
-  showTimeHHMMSS();
+  showTimeHHMM();
 }
