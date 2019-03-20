@@ -43,14 +43,14 @@ NTP ntp;
 
 // DHT11 sensor
 #include <SimpleDHT.h>
-SimpleDHT11         dht;                          // The DHT11 temperature/humidity sensor
 bool                dhtOK         = false;        // The temperature/humidity sensor presence flag
 bool                dhtDrop       = true;         // Always drop the first reading
-const unsigned long dhtDelay      = 60000UL;      // Delay between sensor readings
+const unsigned long dhtDelay      = 10000UL;      // Delay between sensor readings
 const int           pinDHT        = 3;            // Temperature/humidity sensor input pin
+SimpleDHT22         dht(pinDHT);                  // The DHT22 temperature/humidity sensor
 
 // OTA
-int otaPort           = 8266;
+int otaPort = 8266;
 
 /**
   Try to connect to WiFi
@@ -85,40 +85,36 @@ void wifiConnect(int timeout = 300) {
 }
 
 /**
-  Read the DHT11 sensor
+  Read the DHT22 sensor
 
   @param temp temperature
   @param hmdt humidity
   @param drop drop the reading (read twice)
   @return success
 */
-bool dhtRead(int *temp, int *hmdt, bool drop = false) {
+bool dhtRead(byte *temp, byte *hmdt, bool drop = false) {
   static uint32_t nextTime = 0;
-  bool ok = false;
 
   if (millis() >= nextTime) {
-
-
     byte t = 0, h = 0;
     if (drop)
       // Read and drop
-      ok = dht.read(pinDHT, NULL, NULL, NULL);
+      dhtOK = dht.read(NULL, NULL, NULL) != SimpleDHTErrSuccess;
     else {
       // Read and store
-      if (dht.read(pinDHT, &t, &h, NULL) == 0) {
-        if (temp) *temp = (int)t;
-        if (hmdt) *hmdt = (int)h;
-        ok = true;
+      if (dht.read(&t, &h, NULL) == SimpleDHTErrSuccess) {
+        if (temp) *temp = t;
+        if (hmdt) *hmdt = h;
+        dhtOK = true;
       }
     }
 #ifdef DEBUG
     if (!ok) Serial.println(F("Failed to read the DHT11 sensor"));
 #endif
-
     // Repeat after the delay
     nextTime += dhtDelay;
   }
-  return ok;
+  return dhtOK;
 }
 
 /**
@@ -165,7 +161,7 @@ bool showTimeTempHHMM() {
   // Display only if the data has changed
   if (dt.ss != ss) {
     // Read the temperature
-    int temp, hmdt;
+    static byte temp, hmdt;
     dhtRead(&temp, &hmdt);
     // Display
     ss = dt.ss;
@@ -174,14 +170,22 @@ bool showTimeTempHHMM() {
     led.fbPrint(1, dt.hh % 10, true);
     led.fbPrint(2, dt.mm / 10);
     led.fbPrint(3, dt.mm % 10);
-    led.fbPrint(5, temp / 10);
-    led.fbPrint(6, temp % 10);
+    if (dhtOK) {
+      led.fbPrint(6, temp % 10);
+      if (temp >= 10)
+        led.fbPrint(5, temp / 10);
+    }
+    else
+      led.fbPrint(6, 0x0E);
     led.fbPrint(7, 0x0B);
     led.fbDisplay();
 #ifdef DEBUG
     Serial.print(dt.hh);
     Serial.print(":");
     Serial.print(dt.mm);
+    Serial.print(" ");
+    Serial.print(temp);
+    Serial.print("C");
     Serial.println();
 #endif
   }
@@ -336,6 +340,5 @@ void loop() {
   ArduinoOTA.handle();
   yield();
 
-  //showTimeHHMM();
   showTimeTempHHMM();
 }
