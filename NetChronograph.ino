@@ -21,6 +21,11 @@
 // User settings
 #include "config.h"
 
+// Project name and version
+const char NODENAME[] = "NetChrono";
+const char nodename[] = "netchrono";
+const char VERSION[]  = "0.2";
+
 // WiFi
 #include <ESP8266WiFi.h>
 #include <WiFiClient.h>
@@ -36,10 +41,13 @@ LED led;
 #include "ntp.h"
 NTP ntp;
 
-const char NODENAME[] = "NetChrono";
-const char nodename[] = "netchrono";
-const char VERSION[]  = "0.1";
-
+// DHT11 sensor
+#include <SimpleDHT.h>
+SimpleDHT11         dht;                          // The DHT11 temperature/humidity sensor
+bool                dhtOK         = false;        // The temperature/humidity sensor presence flag
+bool                dhtDrop       = true;         // Always drop the first reading
+const unsigned long dhtDelay      = 60000UL;      // Delay between sensor readings
+const int           pinDHT        = 3;            // Temperature/humidity sensor input pin
 
 // OTA
 int otaPort           = 8266;
@@ -77,6 +85,43 @@ void wifiConnect(int timeout = 300) {
 }
 
 /**
+  Read the DHT11 sensor
+
+  @param temp temperature
+  @param hmdt humidity
+  @param drop drop the reading (read twice)
+  @return success
+*/
+bool dhtRead(int *temp, int *hmdt, bool drop = false) {
+  static uint32_t nextTime = 0;
+  bool ok = false;
+
+  if (millis() >= nextTime) {
+
+
+    byte t = 0, h = 0;
+    if (drop)
+      // Read and drop
+      ok = dht.read(pinDHT, NULL, NULL, NULL);
+    else {
+      // Read and store
+      if (dht.read(pinDHT, &t, &h, NULL) == 0) {
+        if (temp) *temp = (int)t;
+        if (hmdt) *hmdt = (int)h;
+        ok = true;
+      }
+    }
+#ifdef DEBUG
+    if (!ok) Serial.println(F("Failed to read the DHT11 sensor"));
+#endif
+
+    // Repeat after the delay
+    nextTime += dhtDelay;
+  }
+  return ok;
+}
+
+/**
   Display the current time in HH.MM format
 */
 bool showTimeHHMM() {
@@ -95,6 +140,43 @@ bool showTimeHHMM() {
     led.fbPrint(3, dt.hh % 10, true);
     led.fbPrint(4, dt.mm / 10);
     led.fbPrint(5, dt.mm % 10);
+    led.fbDisplay();
+#ifdef DEBUG
+    Serial.print(dt.hh);
+    Serial.print(":");
+    Serial.print(dt.mm);
+    Serial.println();
+#endif
+  }
+  return true;
+}
+
+/**
+  Display the current time in HH.MM format and temperature
+*/
+bool showTimeTempHHMM() {
+  static uint8_t ss = 99;
+  // Get the date and time
+  unsigned long utm = ntp.getSeconds();
+  datetime_t dt = ntp.getDateTime(utm);
+  // Check for DST and compute again if needed
+  if (ntp.dstCheck(dt.yy, dt.ll, dt.dd, dt.hh))
+    dt = ntp.getDateTime(utm + 3600);
+  // Display only if the data has changed
+  if (dt.ss != ss) {
+    // Read the temperature
+    int temp, hmdt;
+    dhtRead(&temp, &hmdt);
+    // Display
+    ss = dt.ss;
+    led.fbClear();
+    led.fbPrint(0, dt.hh / 10);
+    led.fbPrint(1, dt.hh % 10, true);
+    led.fbPrint(2, dt.mm / 10);
+    led.fbPrint(3, dt.mm % 10);
+    led.fbPrint(5, temp / 10);
+    led.fbPrint(6, temp % 10);
+    led.fbPrint(7, 0x0B);
     led.fbDisplay();
 #ifdef DEBUG
     Serial.print(dt.hh);
@@ -254,5 +336,6 @@ void loop() {
   ArduinoOTA.handle();
   yield();
 
-  showTimeHHMM();
+  //showTimeHHMM();
+  showTimeTempHHMM();
 }
