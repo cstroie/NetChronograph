@@ -23,6 +23,8 @@
 #include "Arduino.h"
 #include <WiFiUdp.h>
 
+static const uint8_t daysInMonth[] PROGMEM = {31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31};
+
 struct datetime_t {
   uint8_t yy;
   uint8_t ll;
@@ -36,22 +38,31 @@ class NTP {
   public:
     NTP();
     unsigned long init(const char *ntpServer, int ntpPort = 123);
+    unsigned long init(const char *ntpServer, int ntpPort = 123, float tz = 0);
     void          setServer(const char *ntpServer, int ntpPort = 123);
-    void          setTZ(float tz);
+    void          setTZ(float tz = 0);
     void          report(unsigned long utm, char *buf, size_t len);
     unsigned long getSeconds(bool sync = true);
     unsigned long getUptime(char *buf, size_t len);
     datetime_t    getDateTime(unsigned long utm);
+    unsigned long getUnixTime(uint16_t year, uint8_t month, uint8_t day, uint8_t hour, uint8_t minute, uint8_t second);
     uint8_t       getDOW(uint16_t year, uint8_t month, uint8_t day);
+    void          getDST(unsigned long utm);
     bool          dstCheck(uint16_t year, uint8_t month, uint8_t day, uint8_t hour);
-    bool          valid       = false;               // Flag to know the time is accurate
+    bool          dstCheck(unsigned long utm);
+    bool          valid       = false;                // Flag to know the time is accurate
+    uint8_t       dstBeginDay;                        // The last Sunday in March
+    uint8_t       dstEndDay;                          // The last Sunday on October
+    unsigned long dstBegin;                           // The last Sunday in March, 3 AM, in UNIX time
+    unsigned long dstEnd;                             // The last Sunday on October, 4 AM, in UNIX time
+    bool          isDST       = false;                // Flag to know if DST is on
   private:
     unsigned long getNTP();
-    char          server[50];                        // NTP server to connect to (RFC5905)
-    int           port     = 123;                    // NTP port
-    unsigned long nextSync = 0UL;                    // Next time to syncronize
-    unsigned long delta    = 0UL;                    // Difference between real time and internal clock
-    float         TZ       = 0;                      // Time zone
+    char          server[50];                         // NTP server to connect to (RFC5905)
+    int           port     = 123;                     // NTP port
+    unsigned long nextSync = 0UL;                     // Next time to syncronize
+    unsigned long delta    = 0UL;                     // Difference between real time and internal clock
+    float         TZ       = 0;                       // Time zone
 };
 
 #endif /* NTP_H */

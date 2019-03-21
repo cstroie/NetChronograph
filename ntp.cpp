@@ -30,8 +30,20 @@ NTP::NTP() {
   @param ntpPort NTP port
 */
 unsigned long NTP::init(const char *ntpServer, int ntpPort) {
+  return init(ntpServer, ntpPort, 0);
+}
+
+/**
+  Init the NTP module, set the server, port and time zone, and force a sync
+
+  @param ntpServer NTP server
+  @param ntpPort NTP port
+  @param tz time zone in hours
+*/
+unsigned long NTP::init(const char *ntpServer, int ntpPort, float tz) {
   setServer(ntpServer, ntpPort);
-  getSeconds(true);
+  setTZ(tz);
+  return getSeconds(true);
 }
 
 /**
@@ -87,12 +99,13 @@ unsigned long NTP::getSeconds(bool sync) {
       // Time sync has succeeded, sync again in 8 hours
       nextSync = millis() + 28800000UL;
       valid = true;
-      //report(utm);
+      // Check for DST
+      dstCheck(utm);
     }
   }
   // Get current time based on uptime and time delta,
   // or just uptime for no time sync ever
-  return (millis() / 1000) + delta + (long)(TZ * 3600);
+  return (millis() / 1000) + delta + (long)(TZ * 3600) + (isDST ? 3600 : 0);
 }
 
 /**
@@ -137,7 +150,7 @@ unsigned long NTP::getNTP() {
   // Read and discard the first useless bytes (32 for speed, 40 for accuracy)
   for (byte i = 0; i < 40; ++i) client.read();
   // Read the integer part of sending time
-  unsigned long ntpTime = client.read(); // NTP time
+  unsigned long ntpTime = client.read();    // NTP time
   for (byte i = 1; i < 4; i++)
     ntpTime = ntpTime << 8 | client.read();
   // Round to the nearest second if we want accuracy
@@ -183,7 +196,6 @@ unsigned long NTP::getUptime(char *buf, size_t len) {
 */
 datetime_t NTP::getDateTime(unsigned long utm) {
   datetime_t dt;
-  static const uint8_t daysInMonth[] PROGMEM = {31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31};
   // Bring to year 2000 epoch
   utm -= 946684800UL;
   dt.ss = utm % 60;
@@ -212,6 +224,32 @@ datetime_t NTP::getDateTime(unsigned long utm) {
 }
 
 /**
+  Get the UNIX time from date and time
+
+  @param y year   >1752
+  @param m month  1..12
+  @param d day    1..31
+  @param h hour   0..23
+  @param m minute 0..59
+  @param s second 0..59
+  @return UNIX time
+*/
+unsigned long NTP::getUnixTime(uint16_t year, uint8_t month, uint8_t day, uint8_t hour, uint8_t minute, uint8_t second) {
+  // Use year 2000 epoch
+  if (year >= 2000)
+    year -= 2000;
+  // Start counting the days
+  uint16_t days = 365 * year + (year + 3) / 4 - 1 + day;
+  for (uint8_t i = 1; i < month; ++i)
+    days += pgm_read_byte(daysInMonth + i - 1);
+  // Adjust for leap years
+  if (month > 2 && year % 4 == 0)
+    days++;
+  // Compute the seconds, adding the epoch
+  return ((days * 24UL + hour) * 60 + minute) * 60 + second + 946684800UL;
+}
+
+/**
   Determine the day of the week using the Tomohiko Sakamoto's method
 
   @param y year  >1752
@@ -223,6 +261,26 @@ uint8_t NTP::getDOW(uint16_t year, uint8_t month, uint8_t day) {
   uint8_t t[] = {0, 3, 2, 5, 0, 3, 5, 1, 4, 6, 2, 4};
   year -= month < 3;
   return (year + year / 4 - year / 100 + year / 400 + t[month - 1] + day) % 7;
+}
+
+/**
+  Get the DST in begin and end in UNIX time
+
+  @param utm UNIX time
+*/
+void NTP::getDST(unsigned long utm) {
+  // Get the date/time structure
+  datetime_t dt = getDateTime(utm);
+  // Get the last Sunday in March
+  dstBeginDay = 31 - getDOW(2000 + dt.yy, 3, 31);
+  // Get the last Sunday on October
+  dstEndDay = 31 - getDOW(2000 + dt.yy, 10, 31);
+  // The last Sunday in March, 3 AM, in UNIX time
+  dstBegin = getUnixTime(dt.yy, 3, dstBeginDay, 3, 0, 0) + (unsigned long)(TZ * 3600);
+  // The last Sunday on October, 4 AM, in UNIX time
+  dstEnd = getUnixTime(dt.yy, 10, dstEndDay, 4, 0, 0) + (unsigned long)(TZ * 3600);
+  //Serial.println(dstBegin);
+  //Serial.println(dstEnd);
 }
 
 /**
@@ -239,16 +297,33 @@ uint8_t NTP::getDOW(uint16_t year, uint8_t month, uint8_t day) {
 */
 bool NTP::dstCheck(uint16_t year, uint8_t month, uint8_t day, uint8_t hour) {
   // Get the last Sunday in March
-  uint8_t dayBegin = 31 - getDOW(year, 3, 31);
-  //Serial.println(dayBegin);
+  dstBeginDay = 31 - getDOW(year, 3, 31);
+  //Serial.println(dstBegin);
   // Get the last Sunday on October
-  uint8_t dayEnd = 31 - getDOW(year, 10, 31);
-  //Serial.println(dayEnd);
+  dstEndDay = 31 - getDOW(year, 10, 31);
+  //Serial.println(dstEnd);
   // Compute the day where DST changes, since we are checking only
   // at 3 and 4'o clock, this is enough
-  return (month > 3   and month < 10) or                      // Summer
-         (month == 3  and day >  dayBegin) or                 // March
-         (month == 3  and day == dayBegin and hour >= 3) or
-         (month == 10 and day <  dayEnd) or                   // October
-         (month == 10 and day == dayEnd and hour < 4);
+  return (month > 3   and month < 10) or                          // Summer
+         (month == 3  and day >  dstBeginDay) or                  // March
+         (month == 3  and day == dstBeginDay and hour >= 3) or
+         (month == 10 and day <  dstEndDay) or                    // October
+         (month == 10 and day == dstEndDay and hour < 4);
+}
+
+/**
+  Check if a specified date observes DST, according to
+  the time changing rules in Europe:
+
+    start: last Sunday in March,   0300 -> 0400
+    end:   last Sunday in October, 0400 -> 0300
+
+  @param utm UNIX time
+  @return bool DST yes or no
+*/
+bool NTP::dstCheck(unsigned long utm) {
+  // Get the DST first and last seconds for the current year
+  getDST(utm);
+  isDST = (utm >= dstBegin) and (utm < dstEnd);
+  return isDST;
 }

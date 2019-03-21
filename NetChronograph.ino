@@ -109,7 +109,7 @@ bool dhtRead(byte *temp, byte *hmdt, bool drop = false) {
       }
     }
 #ifdef DEBUG
-    if (!ok) Serial.println(F("Failed to read the DHT11 sensor"));
+    if (!dhtOK) Serial.println(F("Failed to read the DHT11 sensor"));
 #endif
     // Repeat after the delay
     nextTime += dhtDelay;
@@ -121,16 +121,17 @@ bool dhtRead(byte *temp, byte *hmdt, bool drop = false) {
   Display the current time in HH.MM format
 */
 bool showTimeHHMM() {
-  static uint8_t ss = 99;
+  // Keep the LSB of UTM
+  static uint8_t ss = 0;
   // Get the date and time
   unsigned long utm = ntp.getSeconds();
-  datetime_t dt = ntp.getDateTime(utm);
-  // Check for DST and compute again if needed
-  if (ntp.dstCheck(dt.yy, dt.ll, dt.dd, dt.hh))
-    dt = ntp.getDateTime(utm + 3600);
-  // Display only if the data has changed
-  if (dt.ss != ss) {
-    ss = dt.ss;
+  // Continue only if the second has changed
+  uint8_t lsb = (uint8_t)(utm & 0xFF);
+  if (lsb != ss) {
+    ss = lsb;
+    // Compute the date an time
+    datetime_t dt = ntp.getDateTime(utm);
+    // Display
     led.fbClear();
     led.fbPrint(2, dt.hh / 10);
     led.fbPrint(3, dt.hh % 10, true);
@@ -151,20 +152,20 @@ bool showTimeHHMM() {
   Display the current time in HH.MM format and temperature
 */
 bool showTimeTempHHMM() {
-  static uint8_t ss = 99;
+  // Keep the LSB of UTM
+  static uint8_t ss = 0;
   // Get the date and time
   unsigned long utm = ntp.getSeconds();
-  datetime_t dt = ntp.getDateTime(utm);
-  // Check for DST and compute again if needed
-  if (ntp.dstCheck(dt.yy, dt.ll, dt.dd, dt.hh))
-    dt = ntp.getDateTime(utm + 3600);
-  // Display only if the data has changed
-  if (dt.ss != ss) {
+  // Continue only if the second has changed
+  uint8_t lsb = (uint8_t)(utm & 0xFF);
+  if (lsb != ss) {
+    ss = lsb;
+    // Compute the date an time
+    datetime_t dt = ntp.getDateTime(utm);
     // Read the temperature
     static byte temp, hmdt;
     dhtRead(&temp, &hmdt);
     // Display
-    ss = dt.ss;
     led.fbClear();
     led.fbPrint(0, dt.hh / 10);
     led.fbPrint(1, dt.hh % 10, true);
@@ -196,16 +197,17 @@ bool showTimeTempHHMM() {
   Display the current time in HH.MM.SS format
 */
 bool showTimeHHMMSS() {
-  static uint8_t ss = 99;
+  // Keep the LSB of UTM
+  static uint8_t ss = 0;
   // Get the date and time
   unsigned long utm = ntp.getSeconds();
-  datetime_t dt = ntp.getDateTime(utm);
-  // Check for DST and compute again if needed
-  if (ntp.dstCheck(dt.yy, dt.ll, dt.dd, dt.hh))
-    dt = ntp.getDateTime(utm + 3600);
-  // Display only if the data has changed
-  if (dt.ss != ss) {
-    ss = dt.ss;
+  // Continue only if the second has changed
+  uint8_t lsb = (uint8_t)(utm & 0xFF);
+  if (lsb != ss) {
+    ss = lsb;
+    // Compute the date an time
+    datetime_t dt = ntp.getDateTime(utm);
+    // Display
     led.fbClear();
     led.fbPrint(1, dt.hh / 10);
     led.fbPrint(2, dt.hh % 10, true);
@@ -328,8 +330,7 @@ void setup() {
   ArduinoOTA.begin();
 
   // Configure NTP
-  ntp.init(NTP_SERVER);
-  ntp.setTZ(NTP_TZ);
+  ntp.init(NTP_SERVER, NTP_PORT, NTP_TZ);
 }
 
 /**
