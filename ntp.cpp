@@ -99,13 +99,20 @@ unsigned long NTP::getSeconds(bool sync) {
       // Time sync has succeeded, sync again in 8 hours
       nextSync = millis() + 28800000UL;
       valid = true;
-      // Check for DST
-      dstCheck(utm);
+      // Get the DST first and last seconds in UNIX time
+      getDST(utm);
     }
   }
   // Get current time based on uptime and time delta,
   // or just uptime for no time sync ever
-  return (millis() / 1000) + delta + (long)(TZ * 3600) + (isDST ? 3600 : 0);
+  unsigned long result = (millis() / 1000) + delta;
+  // Adjust for DST
+  if (checkDST(result))
+    result += 3600;
+  // Adjust for time zone
+  result += (long)(TZ * 3600);
+  // Return the result
+  return result;
 }
 
 /**
@@ -245,7 +252,7 @@ unsigned long NTP::getUnixTime(uint16_t year, uint8_t month, uint8_t day, uint8_
   // Adjust for leap years
   if (month > 2 && year % 4 == 0)
     days++;
-  // Compute the seconds, adding the epoch
+  // Compute the seconds, adding the year 2000 epoch
   return ((days * 24UL + hour) * 60 + minute) * 60 + second + 946684800UL;
 }
 
@@ -276,9 +283,9 @@ void NTP::getDST(unsigned long utm) {
   // Get the last Sunday on October
   dstEndDay = 31 - getDOW(2000 + dt.yy, 10, 31);
   // The last Sunday in March, 3 AM, in UNIX time
-  dstBegin = getUnixTime(dt.yy, 3, dstBeginDay, 3, 0, 0) + (unsigned long)(TZ * 3600);
+  dstBegin = getUnixTime(dt.yy, 3, dstBeginDay, 3, 0, 0) - (long)(TZ * 3600);
   // The last Sunday on October, 4 AM, in UNIX time
-  dstEnd = getUnixTime(dt.yy, 10, dstEndDay, 4, 0, 0) + (unsigned long)(TZ * 3600);
+  dstEnd = getUnixTime(dt.yy, 10, dstEndDay, 4, 0, 0) - (long)((TZ + 1) * 3600);
   //Serial.println(dstBegin);
   //Serial.println(dstEnd);
 }
@@ -295,7 +302,7 @@ void NTP::getDST(unsigned long utm) {
   @param day   day   1..31
   @return bool DST yes or no
 */
-bool NTP::dstCheck(uint16_t year, uint8_t month, uint8_t day, uint8_t hour) {
+bool NTP::checkDST(uint16_t year, uint8_t month, uint8_t day, uint8_t hour) {
   // Get the last Sunday in March
   dstBeginDay = 31 - getDOW(year, 3, 31);
   //Serial.println(dstBegin);
@@ -321,9 +328,8 @@ bool NTP::dstCheck(uint16_t year, uint8_t month, uint8_t day, uint8_t hour) {
   @param utm UNIX time
   @return bool DST yes or no
 */
-bool NTP::dstCheck(unsigned long utm) {
+bool NTP::checkDST(unsigned long utm) {
   // Get the DST first and last seconds for the current year
-  getDST(utm);
   isDST = (utm >= dstBegin) and (utm < dstEnd);
   return isDST;
 }

@@ -48,8 +48,8 @@ class NTP {
     unsigned long getUnixTime(uint16_t year, uint8_t month, uint8_t day, uint8_t hour, uint8_t minute, uint8_t second);
     uint8_t       getDOW(uint16_t year, uint8_t month, uint8_t day);
     void          getDST(unsigned long utm);
-    bool          dstCheck(uint16_t year, uint8_t month, uint8_t day, uint8_t hour);
-    bool          dstCheck(unsigned long utm);
+    bool          checkDST(uint16_t year, uint8_t month, uint8_t day, uint8_t hour);
+    bool          checkDST(unsigned long utm);
     bool          valid       = false;                // Flag to know the time is accurate
     uint8_t       dstBeginDay;                        // The last Sunday in March
     uint8_t       dstEndDay;                          // The last Sunday on October

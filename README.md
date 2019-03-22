@@ -1,2 +1,2 @@
 # NetChronograph
-NTP-synchronized 7-segment clock
+NTP-synchronized 7-segment LED clock.

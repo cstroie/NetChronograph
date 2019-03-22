@@ -24,7 +24,7 @@
 // Project name and version
 const char NODENAME[] = "NetChrono";
 const char nodename[] = "netchrono";
-const char VERSION[]  = "0.2";
+const char VERSION[]  = "0.3";
 
 // WiFi
 #include <ESP8266WiFi.h>
@@ -121,14 +121,13 @@ bool dhtRead(byte *temp, byte *hmdt, bool drop = false) {
   Display the current time in HH.MM format
 */
 bool showTimeHHMM() {
-  // Keep the LSB of UTM
-  static uint8_t ss = 0;
+  // Keep the last UNIX time
+  static unsigned long ltm = 0;
   // Get the date and time
   unsigned long utm = ntp.getSeconds();
   // Continue only if the second has changed
-  uint8_t lsb = (uint8_t)(utm & 0xFF);
-  if (lsb != ss) {
-    ss = lsb;
+  if (utm != ltm) {
+    ltm = utm;
     // Compute the date an time
     datetime_t dt = ntp.getDateTime(utm);
     // Display
@@ -152,14 +151,13 @@ bool showTimeHHMM() {
   Display the current time in HH.MM format and temperature
 */
 bool showTimeTempHHMM() {
-  // Keep the LSB of UTM
-  static uint8_t ss = 0;
+  // Keep the last UNIX time
+  static unsigned long ltm = 0;
   // Get the date and time
   unsigned long utm = ntp.getSeconds();
   // Continue only if the second has changed
-  uint8_t lsb = (uint8_t)(utm & 0xFF);
-  if (lsb != ss) {
-    ss = lsb;
+  if (utm != ltm) {
+    ltm = utm;
     // Compute the date an time
     datetime_t dt = ntp.getDateTime(utm);
     // Read the temperature
@@ -197,14 +195,13 @@ bool showTimeTempHHMM() {
   Display the current time in HH.MM.SS format
 */
 bool showTimeHHMMSS() {
-  // Keep the LSB of UTM
-  static uint8_t ss = 0;
+  // Keep the last UNIX time
+  static unsigned long ltm = 0;
   // Get the date and time
   unsigned long utm = ntp.getSeconds();
   // Continue only if the second has changed
-  uint8_t lsb = (uint8_t)(utm & 0xFF);
-  if (lsb != ss) {
-    ss = lsb;
+  if (utm != ltm) {
+    ltm = utm;
     // Compute the date an time
     datetime_t dt = ntp.getDateTime(utm);
     // Display
@@ -222,6 +219,42 @@ bool showTimeHHMMSS() {
     Serial.print(dt.mm);
     Serial.print(":");
     Serial.print(dt.ss);
+    Serial.println();
+#endif
+  }
+  return true;
+}
+
+/**
+  Display the current date in DD.LL.YYYY format
+*/
+bool showDateDDLLYYYY() {
+  // Keep the last UNIX time
+  static unsigned long ltm = 0;
+  // Get the date and time
+  unsigned long utm = ntp.getSeconds();
+  // Continue only if the second has changed
+  if (utm != ltm) {
+    ltm = utm;
+    // Compute the date an time
+    datetime_t dt = ntp.getDateTime(utm);
+    // Display
+    led.fbClear();
+    led.fbPrint(0, dt.dd / 10);
+    led.fbPrint(1, dt.dd % 10, true);
+    led.fbPrint(2, dt.ll / 10);
+    led.fbPrint(3, dt.ll % 10, true);
+    led.fbPrint(4, 2);
+    led.fbPrint(5, 0);
+    led.fbPrint(6, dt.yy / 10);
+    led.fbPrint(7, dt.yy % 10);
+    led.fbDisplay();
+#ifdef DEBUG
+    Serial.print(dt.dd);
+    Serial.print(".");
+    Serial.print(dt.ll);
+    Serial.print(".");
+    Serial.print(dt.yy + 2000);
     Serial.println();
 #endif
   }
