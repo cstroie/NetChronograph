@@ -177,17 +177,23 @@ bool showTimeTempHHMM() {
     dhtRead(&temp, &hmdt);
     // Display
     led.fbClear();
+    // Time
     led.fbPrint(0, dt.hh / 10);
     led.fbPrint(1, dt.hh % 10, true);
     led.fbPrint(2, dt.mm / 10);
     led.fbPrint(3, dt.mm % 10);
     if (dhtOK) {
+      // Temperature
       led.fbPrint(6, temp % 10);
       if (temp >= 10)
         led.fbPrint(5, temp / 10);
     }
-    else
+    else {
+      // Error '--'
       led.fbPrint(6, 0x0E);
+      led.fbPrint(5, 0x0E);
+    }
+    // Celsius symbol
     led.fbPrint(7, 0x0B);
     led.fbDisplay();
 #ifdef DEBUG
@@ -195,7 +201,10 @@ bool showTimeTempHHMM() {
     Serial.print(":");
     Serial.print(dt.mm);
     Serial.print(" ");
-    Serial.print(temp);
+    if (dhtOK)
+      Serial.print(temp);
+    else
+      Serial.print("--");
     Serial.print("C");
     Serial.println();
 #endif
