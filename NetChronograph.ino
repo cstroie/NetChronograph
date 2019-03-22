@@ -24,7 +24,7 @@
 // Project name and version
 const char NODENAME[] = "NetChrono";
 const char nodename[] = "netchrono";
-const char VERSION[]  = "0.4";
+const char VERSION[]  = "0.5";
 
 // WiFi
 #include <ESP8266WiFi.h>
@@ -32,6 +32,10 @@ const char VERSION[]  = "0.4";
 #include <WiFiUdp.h>
 #include <ESP8266mDNS.h>
 #include <ArduinoOTA.h>
+
+#include <DNSServer.h>            //Local DNS Server used for redirecting all requests to the configuration portal
+#include <ESP8266WebServer.h>     //Local WebServer used to serve the configuration portal
+#include <WiFiManager.h>          //https://github.com/tzapu/WiFiManager WiFi Configuration Magic
 
 // LED driver for MAX7219
 #include "led.h"
@@ -58,6 +62,8 @@ int otaPort = 8266;
 void wifiConnect(int timeout = 300) {
   // Set the host name
   WiFi.hostname(NODENAME);
+  // Set the mode
+  WiFi.mode(WIFI_STA);
   // Try to connect to WiFi
   if (!WiFi.isConnected()) {
     // The animation symbol index
@@ -74,8 +80,13 @@ void wifiConnect(int timeout = 300) {
 #ifdef DEBUG
     Serial.print(F("WiFi connecting "));
 #endif
+#ifdef WIFI_SSID
     WiFi.begin(WIFI_SSID, WIFI_PASS);
-    while (!WiFi.isConnected()) {
+#else
+    WiFi.begin();
+#endif
+    int tries = 0;
+    while (!WiFi.isConnected() and ++tries < timeout) {
 #ifdef DEBUG
       Serial.print(".");
 #endif
@@ -86,13 +97,44 @@ void wifiConnect(int timeout = 300) {
       led.fbWrite(7, led.getAnim(idxAnim, 1));
       led.fbDisplay();
     };
+    if (WiFi.isConnected()) {
 #ifdef DEBUG
-    Serial.println(F(" done."));
+      Serial.println(F(" done."));
 #endif
-    // End animation
-    led.fbWrite(6, led.getAnim(4, 0));
-    led.fbWrite(7, led.getAnim(4, 1));
-    led.fbDisplay();
+      // End animation
+      led.fbWrite(6, led.getAnim(4, 0));
+      led.fbWrite(7, led.getAnim(4, 1));
+      led.fbDisplay();
+    }
+    else {
+      // Display "WIFI AP"
+      led.fbClear();
+      led.fbWrite(0, 0x1E);
+      led.fbWrite(1, 0x3C);
+      led.fbWrite(2, 0x30);
+      led.fbWrite(3, 0x46);
+      led.fbWrite(4, 0x30);
+      led.fbWrite(5, 0x00);
+      led.fbWrite(6, 0x77);
+      led.fbWrite(7, 0x67);
+      led.fbDisplay();
+      // Use the WiFi manager
+      WiFiManager wifiManager;
+      wifiManager.setTimeout(timeout);
+      //wifiManager.setAPCallback(wifiCallback);
+#ifndef DEBUG
+      wifiManager.setDebugOutput(false);
+#endif
+      if (!wifiManager.autoConnect(NODENAME)) {
+#ifdef DEBUG
+        Serial.println(F("No WiFi network."));
+#endif
+        delay(3000);
+        // Reset and try again
+        ESP.reset();
+        delay(5000);
+      }
+    }
   }
 }
 
@@ -302,7 +344,7 @@ void setup() {
   led.init(2, 0, 1, 8);
   // Do a display test for a second
   led.displaytest(true);
-  delay(1000);
+  delay(100);
   led.displaytest(false);
   // Decode nothing
   led.decodemode(0);
@@ -313,8 +355,34 @@ void setup() {
   // Power on the display
   led.shutdown(false);
 
+  /*
+    // Display "NETCHRON"
+    led.fbClear();
+    led.fbWrite(0, 0x76);
+    led.fbWrite(1, 0x4F);
+    led.fbWrite(2, 0x70);
+    led.fbWrite(3, 0x4E);
+    led.fbWrite(4, 0x37);
+    led.fbWrite(5, 0x46);
+    led.fbWrite(6, 0x7E);
+    led.fbWrite(7, 0x76);
+    led.fbDisplay();
+  */
+  // Display "NtChrono"
+  led.fbClear();
+  led.fbWrite(0, 0x76);
+  led.fbWrite(1, 0x0F);
+  led.fbWrite(2, 0x4E);
+  led.fbWrite(3, 0x17);
+  led.fbWrite(4, 0x05);
+  led.fbWrite(5, 0x1D);
+  led.fbWrite(6, 0x15);
+  led.fbWrite(7, 0x1D);
+  led.fbDisplay();
+  delay(1000);
+
   // Try to connect to WiFi
-  wifiConnect();
+  while (!WiFi.isConnected()) wifiConnect();
 
   // OTA Update
   ArduinoOTA.setPort(otaPort);
