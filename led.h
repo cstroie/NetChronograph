@@ -25,9 +25,13 @@
 #include "Arduino.h"
 #include "config.h"
 
+// The basic digits font
 const uint8_t FONT[] = {0x7E, 0x30, 0x6D, 0x79, 0x33, 0x5B, 0x5F, 0x70,
                         0x7F, 0x7B, 0x00, 0x43, 0x4E, 0x63, 0x01, 0x00
                        };
+
+// Animation symbols, the last one is the end-animation
+const uint8_t ANIM[][2] = {{0x0C, 0x60}, {0x06, 0x30}, {0x42, 0x18}, {0x48, 0x48}, {0x4E, 0x78}};
 
 enum LEDOps {OP_NOOP,   OP_DIGIT0, OP_DIGIT1, OP_DIGIT2, OP_DIGIT3,
              OP_DIGIT4, OP_DIGIT5, OP_DIGIT6, OP_DIGIT7, OP_DECODE,
@@ -54,6 +58,8 @@ class LED {
     void fbPrint(uint8_t pos, uint8_t data, bool dp = false);
     void fbWrite(uint8_t pos, uint8_t data);
     void fbClear();
+
+    uint8_t getAnim(uint8_t idx, uint8_t pos);
 
   private:
     uint8_t fbData[DIGITS] = {0};

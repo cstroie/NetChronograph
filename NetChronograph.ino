@@ -24,7 +24,7 @@
 // Project name and version
 const char NODENAME[] = "NetChrono";
 const char nodename[] = "netchrono";
-const char VERSION[]  = "0.3";
+const char VERSION[]  = "0.4";
 
 // WiFi
 #include <ESP8266WiFi.h>
@@ -60,12 +60,16 @@ void wifiConnect(int timeout = 300) {
   WiFi.hostname(NODENAME);
   // Try to connect to WiFi
   if (!WiFi.isConnected()) {
-    // Display "Conn"
+    // The animation symbol index
+    uint8_t idxAnim = 0;
+    // Display "CONN"
     led.fbClear();
     led.fbWrite(0, 0x4E);
-    led.fbWrite(1, 0x1D);
-    led.fbWrite(2, 0x15);
-    led.fbWrite(3, 0x15);
+    led.fbWrite(1, 0x7E);
+    led.fbWrite(2, 0x76);
+    led.fbWrite(3, 0x76);
+    led.fbWrite(6, led.getAnim(idxAnim, 0));
+    led.fbWrite(7, led.getAnim(idxAnim, 1));
     led.fbDisplay();
 #ifdef DEBUG
     Serial.print(F("WiFi connecting "));
@@ -75,12 +79,20 @@ void wifiConnect(int timeout = 300) {
 #ifdef DEBUG
       Serial.print(".");
 #endif
-      // FIXME Do some animation
-      delay(1000);
+      // Do some animation
+      delay(100);
+      idxAnim++;
+      led.fbWrite(6, led.getAnim(idxAnim, 0));
+      led.fbWrite(7, led.getAnim(idxAnim, 1));
+      led.fbDisplay();
     };
 #ifdef DEBUG
     Serial.println(F(" done."));
 #endif
+    // End animation
+    led.fbWrite(6, led.getAnim(4, 0));
+    led.fbWrite(7, led.getAnim(4, 1));
+    led.fbDisplay();
   }
 }
 
@@ -321,11 +333,15 @@ void setup() {
 
   ArduinoOTA.onProgress([](unsigned int progress, unsigned int total) {
     static int otaProgress = -1;
-    int otaPrg = progress / (total / 5);
-    if (otaProgress != otaPrg and otaPrg < 5) {
+    const int steps = 10;
+    int otaPrg = progress / (total / steps);
+    if (otaProgress != otaPrg and otaPrg < steps) {
       otaProgress = otaPrg;
-      // Display one "-" for each tick
-      led.write(4 - otaPrg, 0x01);
+      // Display one '|' for each even tick and '||' for each odd tick
+      if (otaPrg & 0x01)
+        led.write((steps - otaPrg) / 2 - 1, 0x36);
+      else
+        led.write((steps - otaPrg) / 2 - 1, 0x06);
 #ifdef DEBUG
       Serial.printf("Progress: %u%%\r", otaProgress * 10);
 #endif
@@ -333,16 +349,14 @@ void setup() {
   });
 
   ArduinoOTA.onError([](ota_error_t error) {
-    // Display "UP Error"
+    // Display "ERROR  x"
     led.fbClear();
-    led.fbWrite(0, 0x3E);
-    led.fbWrite(1, 0x67);
-    led.fbWrite(2, 0x00);
-    led.fbWrite(3, 0x4F);
-    led.fbWrite(4, 0x05);
-    led.fbWrite(5, 0x05);
-    led.fbWrite(6, 0x1D);
-    led.fbWrite(7, 0x05);
+    led.fbWrite(0, 0x4F);
+    led.fbWrite(1, 0x46);
+    led.fbWrite(2, 0x46);
+    led.fbWrite(3, 0x7E);
+    led.fbWrite(4, 0x46);
+    led.fbPrint(7, error);
     led.fbDisplay();
 #ifdef DEBUG
     Serial.printf("Error[%u]: ", error);
@@ -362,8 +376,27 @@ void setup() {
   // Start OTA handling
   ArduinoOTA.begin();
 
+  // Display "SYNC"
+  led.fbClear();
+  led.fbWrite(0, 0x5B);
+  led.fbWrite(1, 0x3B);
+  led.fbWrite(2, 0x76);
+  led.fbWrite(3, 0x4E);
+  led.fbWrite(6, led.getAnim(0, 0));
+  led.fbWrite(7, led.getAnim(0, 1));
+  led.fbDisplay();
   // Configure NTP
   ntp.init(NTP_SERVER, NTP_PORT, NTP_TZ);
+  // Display and end-animation
+  delay(100);
+  led.fbWrite(6, led.getAnim(2, 0));
+  led.fbWrite(7, led.getAnim(2, 1));
+  led.fbDisplay();
+#ifdef DEBUG
+  char ntpReport[32];
+  ntp.report(ntp.getSeconds(), ntpReport, 32);
+  Serial.println(ntpReport);
+#endif
 }
 
 /**

@@ -169,6 +169,18 @@ void LED::fbClear() {
 }
 
 /**
+  Get the animation symbol from the specified index for
+  the first or second position.
+
+  @param idx the index in animation vector (phase)
+  @param pos the first or second position character
+  @return the symbol
+*/
+uint8_t LED::getAnim(uint8_t idx, uint8_t pos) {
+  return ANIM[idx & 0x03][pos & 0x01];
+}
+
+/**
   Send the data using software SPI
 
   @param reg the register
