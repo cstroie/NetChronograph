@@ -24,7 +24,7 @@
 // Project name and version
 const char NODENAME[] = "NetChrono";
 const char nodename[] = "netchrono";
-const char VERSION[]  = "0.5";
+const char VERSION[]  = "0.6";
 
 // WiFi
 #include <ESP8266WiFi.h>
@@ -112,7 +112,7 @@ void wifiConnect(int timeout = 300) {
       led.fbWrite(0, 0x1E);
       led.fbWrite(1, 0x3C);
       led.fbWrite(2, 0x30);
-      led.fbWrite(3, 0x46);
+      led.fbWrite(3, 0x47);
       led.fbWrite(4, 0x30);
       led.fbWrite(5, 0x00);
       led.fbWrite(6, 0x77);
@@ -351,7 +351,7 @@ void setup() {
   // Clear the display
   led.clear();
   // Set the brightness
-  led.intensity(1);
+  led.intensity(0);
   // Power on the display
   led.shutdown(false);
 
@@ -416,7 +416,7 @@ void setup() {
       otaProgress = otaPrg;
       // Display one '|' for each even tick and '||' for each odd tick
       if (otaPrg & 0x01)
-        led.write((steps - otaPrg) / 2 - 1, 0x36);
+        led.write((steps - otaPrg) / 2, 0x36);
       else
         led.write((steps - otaPrg) / 2 - 1, 0x06);
 #ifdef DEBUG
