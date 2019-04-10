@@ -24,7 +24,7 @@
 // Project name and version
 const char NODENAME[] = "NetChrono";
 const char nodename[] = "netchrono";
-const char VERSION[]  = "0.6";
+const char VERSION[]  = "0.7";
 
 // WiFi
 #include <ESP8266WiFi.h>
@@ -69,13 +69,8 @@ void wifiConnect(int timeout = 300) {
     // The animation symbol index
     uint8_t idxAnim = 0;
     // Display "CONN"
-    led.fbClear();
-    led.fbWrite(0, 0x4E);
-    led.fbWrite(1, 0x7E);
-    led.fbWrite(2, 0x76);
-    led.fbWrite(3, 0x76);
-    led.fbWrite(6, led.getAnim(idxAnim, 0));
-    led.fbWrite(7, led.getAnim(idxAnim, 1));
+    uint8_t msgConn[] = {0x4E, 0x7E, 0x76, 0x76, 0x00, 0x00, led.getAnim(idxAnim, 0), led.getAnim(idxAnim, 1)};
+    led.fbWrite(0, msgConn, sizeof(msgConn) / sizeof(*msgConn));
     led.fbDisplay();
 #ifdef DEBUG
     Serial.print(F("WiFi connecting "));
@@ -108,15 +103,8 @@ void wifiConnect(int timeout = 300) {
     }
     else {
       // Display "WIFI AP"
-      led.fbClear();
-      led.fbWrite(0, 0x1E);
-      led.fbWrite(1, 0x3C);
-      led.fbWrite(2, 0x30);
-      led.fbWrite(3, 0x47);
-      led.fbWrite(4, 0x30);
-      led.fbWrite(5, 0x00);
-      led.fbWrite(6, 0x77);
-      led.fbWrite(7, 0x67);
+      uint8_t msgWiFi[] = {0x1E, 0x3C, 0x30, 0x47, 0x30, 0x00, 0x77, 0x67};
+      led.fbWrite(0, msgWiFi, sizeof(msgWiFi) / sizeof(*msgWiFi));
       led.fbDisplay();
       // Use the WiFi manager
       WiFiManager wifiManager;
@@ -184,12 +172,11 @@ bool showTimeHHMM() {
     ltm = utm;
     // Compute the date an time
     datetime_t dt = ntp.getDateTime(utm);
-    // Display
-    led.fbClear();
-    led.fbPrint(2, dt.hh / 10);
-    led.fbPrint(3, dt.hh % 10, true);
-    led.fbPrint(4, dt.mm / 10);
-    led.fbPrint(5, dt.mm % 10);
+    // Display "  HHMM  "
+    uint8_t msg[] = {dt.hh / 10, dt.hh % 10 + LED_DP,
+                     dt.mm / 10, dt.mm % 10
+                    };
+    led.fbPrint(2, msg, sizeof(msg) / sizeof(*msg));
     led.fbDisplay();
 #ifdef DEBUG
     Serial.print(dt.hh);
@@ -217,26 +204,15 @@ bool showTimeTempHHMM() {
     // Read the temperature
     static byte temp, hmdt;
     dhtRead(&temp, &hmdt);
-    // Display
-    led.fbClear();
-    // Time
-    led.fbPrint(0, dt.hh / 10);
-    led.fbPrint(1, dt.hh % 10, true);
-    led.fbPrint(2, dt.mm / 10);
-    led.fbPrint(3, dt.mm % 10);
-    if (dhtOK) {
-      // Temperature
-      led.fbPrint(6, temp % 10);
-      if (temp >= 10)
-        led.fbPrint(5, temp / 10);
-    }
-    else {
-      // Error '--'
-      led.fbPrint(6, 0x0E);
-      led.fbPrint(5, 0x0E);
-    }
-    // Celsius symbol
-    led.fbPrint(7, 0x0B);
+    // Display "HHMM TTc"
+    uint8_t msg[] = {dt.hh / 10, dt.hh % 10 + LED_DP,
+                     dt.mm / 10, dt.mm % 10,
+                     0x0A,
+                     dhtOK ? (temp % 10) : 0x0E,
+                     dhtOK ? (temp / 10) : 0x0E,
+                     0x0B
+                    };
+    led.fbPrint(0, msg, sizeof(msg) / sizeof(*msg));
     led.fbDisplay();
 #ifdef DEBUG
     Serial.print(dt.hh);
@@ -247,7 +223,7 @@ bool showTimeTempHHMM() {
       Serial.print(temp);
     else
       Serial.print("--");
-    Serial.print("C");
+    Serial.print("c");
     Serial.println();
 #endif
   }
@@ -269,12 +245,11 @@ bool showTimeHHMMSS() {
     datetime_t dt = ntp.getDateTime(utm);
     // Display
     led.fbClear();
-    led.fbPrint(1, dt.hh / 10);
-    led.fbPrint(2, dt.hh % 10, true);
-    led.fbPrint(3, dt.mm / 10);
-    led.fbPrint(4, dt.mm % 10, true);
-    led.fbPrint(5, dt.ss / 10);
-    led.fbPrint(6, dt.ss % 10);
+    uint8_t msg[] = {dt.hh / 10, dt.hh % 10 + LED_DP,
+                     dt.mm / 10, dt.mm % 10 + LED_DP,
+                     dt.ss / 10, dt.ss % 10
+                    };
+    led.fbPrint(1, msg, sizeof(msg) / sizeof(*msg));
     led.fbDisplay();
 #ifdef DEBUG
     Serial.print(dt.hh);
@@ -302,15 +277,11 @@ bool showDateDDLLYYYY() {
     // Compute the date an time
     datetime_t dt = ntp.getDateTime(utm);
     // Display
-    led.fbClear();
-    led.fbPrint(0, dt.dd / 10);
-    led.fbPrint(1, dt.dd % 10, true);
-    led.fbPrint(2, dt.ll / 10);
-    led.fbPrint(3, dt.ll % 10, true);
-    led.fbPrint(4, 2);
-    led.fbPrint(5, 0);
-    led.fbPrint(6, dt.yy / 10);
-    led.fbPrint(7, dt.yy % 10);
+    uint8_t data[] = {dt.dd / 10, dt.dd % 10 + LED_DP,
+                      dt.ll / 10, dt.ll % 10 + LED_DP,
+                      0x02, 0x00, dt.yy / 10, dt.yy % 10
+                     };
+    led.fbPrint(0, data, sizeof(data) / sizeof(*data));
     led.fbDisplay();
 #ifdef DEBUG
     Serial.print(dt.dd);
@@ -342,44 +313,31 @@ void setup() {
   // Initialize the LEDs
   // For ESP8266-01: DIN GPIO2, CLK GPIO0, LOAD TXD (GPIO1)
   led.init(2, 0, 1, 8);
-  // Do a display test for a second
-  led.displaytest(true);
-  delay(100);
-  led.displaytest(false);
+  // Do a display test for a split-second
+  //led.displaytest(true);
+  //delay(100);
+  //led.displaytest(false);
   // Decode nothing
   led.decodemode(0);
   // Clear the display
   led.clear();
-  // Set the brightness
-  led.intensity(0);
   // Power on the display
   led.shutdown(false);
 
   /*
     // Display "NETCHRON"
-    led.fbClear();
-    led.fbWrite(0, 0x76);
-    led.fbWrite(1, 0x4F);
-    led.fbWrite(2, 0x70);
-    led.fbWrite(3, 0x4E);
-    led.fbWrite(4, 0x37);
-    led.fbWrite(5, 0x46);
-    led.fbWrite(6, 0x7E);
-    led.fbWrite(7, 0x76);
-    led.fbDisplay();
+    uint8_t mgsWelcome[] = {0x76, 0x4F, 0x70, 0x4E, 0x37, 0x46, 0x7E, 0x76};
   */
   // Display "NtChrono"
-  led.fbClear();
-  led.fbWrite(0, 0x76);
-  led.fbWrite(1, 0x0F);
-  led.fbWrite(2, 0x4E);
-  led.fbWrite(3, 0x17);
-  led.fbWrite(4, 0x05);
-  led.fbWrite(5, 0x1D);
-  led.fbWrite(6, 0x15);
-  led.fbWrite(7, 0x1D);
+  uint8_t mgsWelcome[] = {0x76, 0x0F, 0x4E, 0x17, 0x05, 0x1D, 0x15, 0x1D};
+  led.fbWrite(0, mgsWelcome, sizeof(mgsWelcome) / sizeof(*mgsWelcome));
   led.fbDisplay();
-  delay(1000);
+  // Reduce the brightness progressively
+  for (uint8_t i = 15; i >= 2; i--) {
+    // Set the brightness
+    led.intensity(i);
+    delay(100);
+  }
 
   // Try to connect to WiFi
   while (!WiFi.isConnected()) wifiConnect();
@@ -414,7 +372,7 @@ void setup() {
     int otaPrg = progress / (total / steps);
     if (otaProgress != otaPrg and otaPrg < steps) {
       otaProgress = otaPrg;
-      // Display one '|' for each even tick and '||' for each odd tick
+      // Display one '|' for each odd tick and '||' for each even tick
       if (otaPrg & 0x01)
         led.write((steps - otaPrg) / 2, 0x36);
       else
@@ -427,12 +385,8 @@ void setup() {
 
   ArduinoOTA.onError([](ota_error_t error) {
     // Display "ERROR  x"
-    led.fbClear();
-    led.fbWrite(0, 0x4F);
-    led.fbWrite(1, 0x46);
-    led.fbWrite(2, 0x46);
-    led.fbWrite(3, 0x7E);
-    led.fbWrite(4, 0x46);
+    uint8_t msgError[] = {0x4F, 0x46, 0x46, 0x7E, 0x46};
+    led.fbWrite(0, msgError, sizeof(msgError) / sizeof(*msgError));
     led.fbPrint(7, error);
     led.fbDisplay();
 #ifdef DEBUG
@@ -454,13 +408,8 @@ void setup() {
   ArduinoOTA.begin();
 
   // Display "SYNC"
-  led.fbClear();
-  led.fbWrite(0, 0x5B);
-  led.fbWrite(1, 0x3B);
-  led.fbWrite(2, 0x76);
-  led.fbWrite(3, 0x4E);
-  led.fbWrite(6, led.getAnim(0, 0));
-  led.fbWrite(7, led.getAnim(0, 1));
+  uint8_t msgSync[] = {0x5B, 0x3B, 0x76, 0x4E, 0x00, 0x00, led.getAnim(0, 0), led.getAnim(0, 1)};
+  led.fbWrite(0, msgSync, sizeof(msgSync) / sizeof(*msgSync));
   led.fbDisplay();
   // Configure NTP
   ntp.init(NTP_SERVER, NTP_PORT, NTP_TZ);
