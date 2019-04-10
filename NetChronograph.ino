@@ -24,7 +24,7 @@
 // Project name and version
 const char NODENAME[] = "NetChrono";
 const char nodename[] = "netchrono";
-const char VERSION[]  = "0.7";
+const char VERSION[]  = "0.8";
 
 // WiFi
 #include <ESP8266WiFi.h>
@@ -53,7 +53,8 @@ const int           pinDHT        = 3;            // Temperature/humidity sensor
 SimpleDHT11         dht(pinDHT);                  // The DHT22 temperature/humidity sensor
 
 // OTA
-int otaPort = 8266;
+int otaPort     = 8266;
+int otaProgress = -1;
 
 /**
   Try to connect to WiFi
@@ -351,6 +352,7 @@ void setup() {
     led.intensity(i);
     delay(100);
   }
+  delay(1000);
 
   // Try to connect to WiFi
   while (!WiFi.isConnected()) wifiConnect();
@@ -361,6 +363,8 @@ void setup() {
   // ArduinoOTA.setPassword((const char *)"123");
 
   ArduinoOTA.onStart([]() {
+    // Restart the progress
+    otaProgress = -1;
     // Display "UP"
     led.fbClear();
     led.fbWrite(0, 0x3E);
@@ -380,7 +384,6 @@ void setup() {
   });
 
   ArduinoOTA.onProgress([](unsigned int progress, unsigned int total) {
-    static int otaProgress = -1;
     const int steps = 10;
     int otaPrg = progress / (total / steps);
     if (otaProgress != otaPrg and otaPrg < steps) {
@@ -436,6 +439,10 @@ void setup() {
   ntp.report(ntp.getSeconds(), ntpReport, 32);
   Serial.println(ntpReport);
 #endif
+
+  // Show the date, briefly
+  showDateDDLLYYYY();
+  delay(2000);
 }
 
 /**
