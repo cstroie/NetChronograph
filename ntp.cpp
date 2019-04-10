@@ -85,20 +85,20 @@ void NTP::report(unsigned long utm, char *buf, size_t len) {
 */
 unsigned long NTP::getSeconds(bool sync) {
   // Check if we need to sync
-  if (millis() >= nextSync and sync) {
+  if (millis() >= nextSync or sync) {
     // Try to get the time from Internet
     unsigned long utm = getNTP();
     if (utm == 0) {
       // Time sync has failed, sync again over one minute
-      nextSync = millis() + 60000UL;
-      valid = false;
+      nextSync = millis() + 1000UL * 60UL;
+      accurate = false;
     }
     else {
       // Compute the new time delta
       delta = utm - (millis() / 1000);
       // Time sync has succeeded, sync again in 8 hours
-      nextSync = millis() + 28800000UL;
-      valid = true;
+      nextSync = millis() + 1000UL * 60UL * 60UL * 8;
+      accurate = true;
       // Get the DST first and last seconds in UNIX time
       getDST(utm);
     }
@@ -107,10 +107,10 @@ unsigned long NTP::getSeconds(bool sync) {
   // or just uptime for no time sync ever
   unsigned long result = (millis() / 1000) + delta;
   // Adjust for DST
-  if (checkDST(result))
-    result += 3600;
+  if (isDST(result))
+    result += 3600UL;
   // Adjust for time zone
-  result += (long)(TZ * 3600);
+  result += (long)(TZ * 3600UL);
   // Return the result
   return result;
 }
@@ -170,7 +170,7 @@ unsigned long NTP::getNTP() {
   // Discard the rest of the packet and stop
   client.flush();
   client.stop();
-  return ntpTime - 2208988800UL;            // convert to Unix time
+  return ntpTime - FROM_1900_TO_1970;       // convert to Unix time
 }
 
 /**
@@ -185,7 +185,7 @@ unsigned long NTP::getUptime(char *buf, size_t len) {
   unsigned long upt = millis() / 1000;
   // Compute days, hours, minutes and seconds
   int ss =  upt % 60;
-  int mm = (upt % 3600) / 60;
+  int mm = (upt % 3600)   / 60;
   int hh = (upt % 86400L) / 3600;
   int dd =  upt / 86400L;
   // Create the formatted time
@@ -204,12 +204,16 @@ unsigned long NTP::getUptime(char *buf, size_t len) {
 datetime_t NTP::getDateTime(unsigned long utm) {
   datetime_t dt;
   // Bring to year 2000 epoch
-  utm -= 946684800UL;
+  utm -= FROM_1970_TO_2000;
+  // Seconds
   dt.ss = utm % 60;
   utm /= 60;
+  // Minutes
   dt.mm = utm % 60;
   utm /= 60;
+  // Hours
   dt.hh = utm % 24;
+  // Years
   uint16_t days = utm / 24;
   uint8_t leap;
   for (dt.yy = 0; ; ++dt.yy) {
@@ -218,6 +222,7 @@ datetime_t NTP::getDateTime(unsigned long utm) {
       break;
     days -= 365 + leap;
   }
+  // Months
   for (dt.ll = 1; ; ++dt.ll) {
     uint8_t daysPerMonth = pgm_read_byte(daysInMonth + dt.ll - 1);
     if (leap && dt.ll == 2)
@@ -226,6 +231,7 @@ datetime_t NTP::getDateTime(unsigned long utm) {
       break;
     days -= daysPerMonth;
   }
+  // Days
   dt.dd = days + 1;
   return dt;
 }
@@ -253,7 +259,7 @@ unsigned long NTP::getUnixTime(uint16_t year, uint8_t month, uint8_t day, uint8_
   if (month > 2 && year % 4 == 0)
     days++;
   // Compute the seconds, adding the year 2000 epoch
-  return ((days * 24UL + hour) * 60 + minute) * 60 + second + 946684800UL;
+  return ((days * 24UL + hour) * 60 + minute) * 60 + second + FROM_1970_TO_2000;
 }
 
 /**
@@ -271,7 +277,7 @@ uint8_t NTP::getDOW(uint16_t year, uint8_t month, uint8_t day) {
 }
 
 /**
-  Get the DST in begin and end in UNIX time
+  Get the DST begin and end in UNIX time for seconds and days
 
   @param utm UNIX time
 */
@@ -284,10 +290,8 @@ void NTP::getDST(unsigned long utm) {
   dstEndDay = 31 - getDOW(2000 + dt.yy, 10, 31);
   // The last Sunday in March, 3 AM, in UNIX time
   dstBegin = getUnixTime(dt.yy, 3, dstBeginDay, 3, 0, 0) - (long)(TZ * 3600);
-  // The last Sunday on October, 4 AM, in UNIX time
-  dstEnd = getUnixTime(dt.yy, 10, dstEndDay, 4, 0, 0) - (long)((TZ + 1) * 3600);
-  //Serial.println(dstBegin);
-  //Serial.println(dstEnd);
+  // The last Sunday on October, 4 AM, in UNIX time (is 3 AM without DST!)
+  dstEnd = getUnixTime(dt.yy, 10, dstEndDay, 3, 0, 0) - (long)(TZ * 3600);
 }
 
 /**
@@ -302,13 +306,11 @@ void NTP::getDST(unsigned long utm) {
   @param day   day   1..31
   @return bool DST yes or no
 */
-bool NTP::checkDST(uint16_t year, uint8_t month, uint8_t day, uint8_t hour) {
+bool NTP::isDST(uint16_t year, uint8_t month, uint8_t day, uint8_t hour) {
   // Get the last Sunday in March
   dstBeginDay = 31 - getDOW(year, 3, 31);
-  //Serial.println(dstBegin);
   // Get the last Sunday on October
   dstEndDay = 31 - getDOW(year, 10, 31);
-  //Serial.println(dstEnd);
   // Compute the day where DST changes, since we are checking only
   // at 3 and 4'o clock, this is enough
   return (month > 3   and month < 10) or                          // Summer
@@ -328,8 +330,24 @@ bool NTP::checkDST(uint16_t year, uint8_t month, uint8_t day, uint8_t hour) {
   @param utm UNIX time
   @return bool DST yes or no
 */
-bool NTP::checkDST(unsigned long utm) {
-  // Get the DST first and last seconds for the current year
-  isDST = (utm >= dstBegin) and (utm < dstEnd);
-  return isDST;
+bool NTP::isDST(unsigned long utm) {
+  return (utm >= dstBegin) and (utm < dstEnd);
+}
+
+/**
+  Check if last sync succeeded
+
+  @return bool synced or not
+*/
+bool NTP::isAccurate() {
+  return accurate;
+}
+
+/**
+  Check if the time is valid (any previous sync succeeded)
+
+  @return bool time valid or not
+*/
+bool NTP::isValid() {
+  return delta > 0UL;
 }
