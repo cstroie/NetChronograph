@@ -48,10 +48,9 @@ NTP ntp;
 // DHT11 sensor
 #include <SimpleDHT.h>
 bool                dhtOK         = false;        // The temperature/humidity sensor presence flag
-bool                dhtDrop       = true;         // Always drop the first reading
-const unsigned long dhtDelay      = 10000UL;      // Delay between sensor readings
+const unsigned long dhtDelay      = 1000UL * 10;  // Delay between sensor readings
 const int           pinDHT        = 3;            // Temperature/humidity sensor input pin
-SimpleDHT22         dht(pinDHT);                  // The DHT22 temperature/humidity sensor
+SimpleDHT11         dht(pinDHT);                  // The DHT22 temperature/humidity sensor
 
 // OTA
 int otaPort = 8266;
@@ -139,19 +138,20 @@ bool dhtRead(byte *temp, byte *hmdt, bool drop = false) {
 
   if (millis() >= nextTime) {
     byte t = 0, h = 0;
+    dhtOK = false;
     if (drop)
       // Read and drop
-      dhtOK = dht.read(NULL, NULL, NULL) != SimpleDHTErrSuccess;
+      dht.read(NULL, NULL, NULL);
     else {
       // Read and store
       if (dht.read(&t, &h, NULL) == SimpleDHTErrSuccess) {
-        if (temp) *temp = t;
-        if (hmdt) *hmdt = h;
+        *temp = t;
+        *hmdt = h;
         dhtOK = true;
       }
     }
 #ifdef DEBUG
-    if (!dhtOK) Serial.println(F("Failed to read the DHT11 sensor"));
+    if (!dhtOK) Serial.println(F("ERR: DHT11"));
 #endif
     // Repeat after the delay
     nextTime += dhtDelay;
@@ -181,6 +181,7 @@ bool showTimeHHMM() {
     led.fbPrint(2, msg, sizeof(msg) / sizeof(*msg));
     led.fbDisplay();
 #ifdef DEBUG
+    if (!ntpOK) Serial.println(F("ERR: NTP"));
     Serial.print(dt.hh);
     Serial.print(":");
     Serial.print(dt.mm);
@@ -219,6 +220,7 @@ bool showTimeTempHHMM() {
     led.fbPrint(0, msg, sizeof(msg) / sizeof(*msg));
     led.fbDisplay();
 #ifdef DEBUG
+    if (!ntpOK) Serial.println(F("ERR: NTP"));
     Serial.print(dt.hh);
     Serial.print(":");
     Serial.print(dt.mm);
@@ -258,6 +260,7 @@ bool showTimeHHMMSS() {
     led.fbPrint(1, msg, sizeof(msg) / sizeof(*msg));
     led.fbDisplay();
 #ifdef DEBUG
+    if (!ntpOK) Serial.println(F("ERR: NTP"));
     Serial.print(dt.hh);
     Serial.print(":");
     Serial.print(dt.mm);
@@ -293,6 +296,7 @@ bool showDateDDLLYYYY() {
     led.fbPrint(0, data, sizeof(data) / sizeof(*data));
     led.fbDisplay();
 #ifdef DEBUG
+    if (!ntpOK) Serial.println(F("ERR: NTP"));
     Serial.print(dt.dd);
     Serial.print(".");
     Serial.print(dt.ll);
