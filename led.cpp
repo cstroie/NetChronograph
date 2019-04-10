@@ -40,7 +40,9 @@ void LED::init(uint8_t dataPin, uint8_t clkPin, uint8_t csPin, uint8_t digits) {
   /* Configure the pins for software SPI */
 #ifndef DEBUG
   pinMode(SPI_MOSI, OUTPUT);
+  digitalWrite(SPI_MOSI, LOW);
   pinMode(SPI_CLK, OUTPUT);
+  digitalWrite(SPI_CLK, LOW);
   pinMode(SPI_CS, OUTPUT);
   digitalWrite(SPI_CS, HIGH);
 #endif
