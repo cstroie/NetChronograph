@@ -152,6 +152,40 @@ void LED::fbPrint(uint8_t pos, uint8_t data, bool dp) {
 }
 
 /**
+  Print an array of valid symbols starting at the specified position
+
+  @param pos position (0 is left)
+  @param data the character/digit to print
+  @param len number of characters
+*/
+void LED::fbPrint(uint8_t pos, uint8_t* data, uint8_t len) {
+  if (len > DIGITS)
+    len = DIGITS;
+  fbClear();
+#ifdef DEBUG
+  Serial.print(F("PRT: "));
+#endif
+  for (uint8_t i = 0; i < len; i++) {
+    fbPrint(pos + i, data[i] & (LED_DP - 1), data[i] & LED_DP);
+#ifdef DEBUG
+    if (data[i] < 0x10 or
+        (data[i] > LED_DP and data[i] - LED_DP < 0x10))
+      Serial.print("0");
+    if (data[i] > LED_DP) {
+      Serial.print(data[i] - LED_DP, 16);
+      Serial.print(".");
+    }
+    else
+      Serial.print(data[i], 16);
+    if (i < len - 1)
+      Serial.print(F(" "));
+    else
+      Serial.println();
+#endif
+  }
+}
+
+/**
   Write arbitrary data at the specified position
 
   @param pos position (0 is left)
@@ -159,6 +193,40 @@ void LED::fbPrint(uint8_t pos, uint8_t data, bool dp) {
 */
 void LED::fbWrite(uint8_t pos, uint8_t data) {
   this->fbData[pos & 0x07] = data;
+}
+
+/**
+  Write an array of arbitrary data starting at the specified position
+
+  @param pos starting position (0 is left)
+  @param data the data to write
+  @param len number of characters
+*/
+void LED::fbWrite(uint8_t pos, uint8_t* data, uint8_t len) {
+  if (len > DIGITS)
+    len = DIGITS;
+  fbClear();
+#ifdef DEBUG
+  Serial.print(F("WRT: "));
+#endif
+  for (uint8_t i = 0; i < len; i++) {
+    fbWrite(pos + i, data[i]);
+#ifdef DEBUG
+    if (data[i] < 0x10 or
+        (data[i] > LED_DP and data[i] - LED_DP < 0x10))
+      Serial.print("0");
+    if (data[i] > LED_DP) {
+      Serial.print(data[i] - LED_DP, 16);
+      Serial.print(".");
+    }
+    else
+      Serial.print(data[i], 16);
+    if (i < len - 1)
+      Serial.print(F(", "));
+    else
+      Serial.println();
+#endif
+  }
 }
 
 /**

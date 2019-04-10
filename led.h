@@ -21,13 +21,14 @@
 #define LED_H
 
 #define DIGITS  8
+#define LED_DP  0x80
 
 #include "Arduino.h"
 #include "config.h"
 
 // The basic digits font
-const uint8_t FONT[] = {0x7E, 0x30, 0x6D, 0x79, 0x33, 0x5B, 0x5F, 0x70,
-                        0x7F, 0x7B, 0x00, 0x43, 0x4E, 0x25, 0x01, 0x00
+const uint8_t FONT[] = {0x7E, 0x30, 0x6D, 0x79, 0x33, 0x5B, 0x5F, 0x70, // 0,1,2,3,4,5,6,7
+                        0x7F, 0x7B, 0x00, 0x43, 0x4E, 0x25, 0x01, 0x47  // 8,9, ,c,C,%,-,F
                        };
 
 // Animation symbols, the last one is the end-animation
@@ -56,7 +57,9 @@ class LED {
 
     void fbDisplay();
     void fbPrint(uint8_t pos, uint8_t data, bool dp = false);
+    void fbPrint(uint8_t pos, uint8_t* data, uint8_t len);
     void fbWrite(uint8_t pos, uint8_t data);
+    void fbWrite(uint8_t pos, uint8_t* data, uint8_t len);
     void fbClear();
 
     uint8_t getAnim(uint8_t idx, uint8_t pos);
