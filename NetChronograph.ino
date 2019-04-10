@@ -170,11 +170,13 @@ bool showTimeHHMM() {
   // Continue only if the second has changed
   if (utm != ltm) {
     ltm = utm;
+    // Check if the time data is valid
+    bool ntpOK = ntp.isValid();
     // Compute the date an time
     datetime_t dt = ntp.getDateTime(utm);
     // Display "  HHMM  "
-    uint8_t msg[] = {dt.hh / 10, dt.hh % 10 + LED_DP,
-                     dt.mm / 10, dt.mm % 10
+    uint8_t msg[] = {ntpOK ? (dt.hh / 10) : 0x0E, ntpOK ? (dt.hh % 10 + LED_DP) : (0x0E + LED_DP),
+                     ntpOK ? (dt.mm / 10) : 0x0E, ntpOK ? (dt.mm % 10) : 0x0E
                     };
     led.fbPrint(2, msg, sizeof(msg) / sizeof(*msg));
     led.fbDisplay();
@@ -199,14 +201,16 @@ bool showTimeTempHHMM() {
   // Continue only if the second has changed
   if (utm != ltm) {
     ltm = utm;
+    // Check if the time data is valid
+    bool ntpOK = ntp.isValid();
     // Compute the date an time
     datetime_t dt = ntp.getDateTime(utm);
     // Read the temperature
     static byte temp, hmdt;
     dhtRead(&temp, &hmdt);
     // Display "HHMM TTc"
-    uint8_t msg[] = {dt.hh / 10, dt.hh % 10 + LED_DP,
-                     dt.mm / 10, dt.mm % 10,
+    uint8_t msg[] = {ntpOK ? (dt.hh / 10) : 0x0E, ntpOK ? (dt.hh % 10 + LED_DP) : (0x0E + LED_DP),
+                     ntpOK ? (dt.mm / 10) : 0x0E, ntpOK ? (dt.mm % 10) : 0x0E,
                      0x0A,
                      dhtOK ? (temp % 10) : 0x0E,
                      dhtOK ? (temp / 10) : 0x0E,
@@ -241,13 +245,15 @@ bool showTimeHHMMSS() {
   // Continue only if the second has changed
   if (utm != ltm) {
     ltm = utm;
+    // Check if the time data is valid
+    bool ntpOK = ntp.isValid();
     // Compute the date an time
     datetime_t dt = ntp.getDateTime(utm);
     // Display
     led.fbClear();
-    uint8_t msg[] = {dt.hh / 10, dt.hh % 10 + LED_DP,
-                     dt.mm / 10, dt.mm % 10 + LED_DP,
-                     dt.ss / 10, dt.ss % 10
+    uint8_t msg[] = {ntpOK ? (dt.hh / 10) : 0x0E, ntpOK ? (dt.hh % 10 + LED_DP) : (0x0E + LED_DP),
+                     ntpOK ? (dt.mm / 10) : 0x0E, ntpOK ? (dt.mm % 10 + LED_DP) : (0x0E + LED_DP),
+                     ntpOK ? (dt.ss / 10) : 0x0E, ntpOK ? (dt.ss % 10) : 0x0E
                     };
     led.fbPrint(1, msg, sizeof(msg) / sizeof(*msg));
     led.fbDisplay();
@@ -274,12 +280,15 @@ bool showDateDDLLYYYY() {
   // Continue only if the second has changed
   if (utm != ltm) {
     ltm = utm;
+    // Check if the time data is valid
+    bool ntpOK = ntp.isValid();
     // Compute the date an time
     datetime_t dt = ntp.getDateTime(utm);
     // Display
-    uint8_t data[] = {dt.dd / 10, dt.dd % 10 + LED_DP,
-                      dt.ll / 10, dt.ll % 10 + LED_DP,
-                      0x02, 0x00, dt.yy / 10, dt.yy % 10
+    uint8_t data[] = {ntpOK ? (dt.dd / 10) : 0x0E, ntpOK ? (dt.dd % 10 + LED_DP) : (0x0E + LED_DP),
+                      ntpOK ? (dt.ll / 10) : 0x0E, ntpOK ? (dt.ll % 10 + LED_DP) : (0x0E + LED_DP),
+                      ntpOK ? 0x02 : 0x0E, ntpOK ? 0x00 : 0x0E,
+                      ntpOK ? (dt.yy / 10) : 0x0E, ntpOK ? dt.yy % 10 : 0x0E,
                      };
     led.fbPrint(0, data, sizeof(data) / sizeof(*data));
     led.fbDisplay();
