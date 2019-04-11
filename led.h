@@ -72,7 +72,6 @@ class LED {
     uint8_t SPI_CS;   // The maximum number of devices we use
 
     void sendSPI(uint8_t reg, uint8_t data);
-    void shiftOut(uint8_t dataPin, uint8_t clockPin, uint8_t bitOrder, uint8_t val);
 };
 
 #endif /* LED_H */
