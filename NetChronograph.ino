@@ -325,12 +325,10 @@ void setup() {
 #endif
 
   // Initialize the LEDs
-  // For ESP8266-01: DIN TXD GPIO1, CLK GPIO0, LOAD GPIO2
+  // For ESP8266-01: DIN GPIO1 (TXD), CLK GPIO0, LOAD GPIO2
   led.init(1, 0, 2, 8);
-  // Do a display test for a split-second
-  //led.displaytest(true);
-  //delay(100);
-  //led.displaytest(false);
+  // Disable the display test
+  led.displaytest(false);
   // Decode nothing
   led.decodemode(0);
   // Clear the display

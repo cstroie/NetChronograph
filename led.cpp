@@ -40,11 +40,11 @@ void LED::init(uint8_t dataPin, uint8_t clkPin, uint8_t csPin, uint8_t digits) {
   /* Configure the pins for software SPI */
 #ifndef DEBUG
   pinMode(SPI_MOSI, OUTPUT);
-  digitalWrite(SPI_MOSI, LOW);
+  digitalWrite(SPI_MOSI, HIGH); // The blue led is connected here, lights on low
   pinMode(SPI_CLK, OUTPUT);
-  digitalWrite(SPI_CLK, LOW);
+  digitalWrite(SPI_CLK, LOW);   // Data bit is read on rising edge of the clock
   pinMode(SPI_CS, OUTPUT);
-  digitalWrite(SPI_CS, HIGH);
+  digitalWrite(SPI_CS, HIGH);   // Data is latched on rising edge of CS
 #endif
   // Set the scan limit
   this->scanlimit(digits);
@@ -267,9 +267,31 @@ void LED::sendSPI(uint8_t reg, uint8_t data) {
   /* Chip select */
   digitalWrite(SPI_CS, LOW);
   /* Send the data */
-  shiftOut(SPI_MOSI, SPI_CLK, MSBFIRST, reg);
-  shiftOut(SPI_MOSI, SPI_CLK, MSBFIRST, data);
+  this->shiftOut(SPI_MOSI, SPI_CLK, MSBFIRST, reg);
+  this->shiftOut(SPI_MOSI, SPI_CLK, MSBFIRST, data);
   /* Latch data */
   digitalWrite(SPI_CS, HIGH);
 #endif
+}
+
+/**
+  Shift out the data, using a short delay
+
+  @param dataPin the data out pin
+  @param clockPin the clock pin
+  @param bitOrder the bit order, MSB or LSB first
+  @param val the byte to send
+*/
+void LED::shiftOut(uint8_t dataPin, uint8_t clockPin, uint8_t bitOrder, uint8_t val) {
+  uint8_t i;
+  for (i = 0; i < 8; i++) {
+    if (bitOrder == LSBFIRST)
+      digitalWrite(dataPin, !!(val & (1 << i)));
+    else
+      digitalWrite(dataPin, !!(val & (1 << (7 - i))));
+    delay(1);
+    digitalWrite(clockPin, HIGH);
+    delay(1);
+    digitalWrite(clockPin, LOW);
+  }
 }
