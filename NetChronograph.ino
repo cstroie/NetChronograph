@@ -24,7 +24,7 @@
 // Project name and version
 const char NODENAME[] = "NetChrono";
 const char nodename[] = "netchrono";
-const char VERSION[]  = "0.8";
+const char VERSION[]  = "0.9";
 
 // WiFi
 #include <ESP8266WiFi.h>
@@ -214,8 +214,8 @@ bool showTimeTempHHMM() {
     uint8_t msg[] = {ntpOK ? (dt.hh / 10) : 0x0E, ntpOK ? (dt.hh % 10 + LED_DP) : (0x0E + LED_DP),
                      ntpOK ? (dt.mm / 10) : 0x0E, ntpOK ? (dt.mm % 10) : 0x0E,
                      0x0A,
-                     dhtOK ? (temp % 10) : 0x0E,
                      dhtOK ? (temp / 10) : 0x0E,
+                     dhtOK ? (temp % 10) : 0x0E,
                      0x0B
                     };
     led.fbPrint(0, msg, sizeof(msg) / sizeof(*msg));
@@ -438,9 +438,19 @@ void setup() {
   Serial.println(ntpReport);
 #endif
 
+  // Power off the display
+  led.shutdown(true);
   // Show the date, briefly
   showDateDDLLYYYY();
+  delay(500);
+  // Power on the display
+  led.shutdown(false);
   delay(2000);
+  // Power off the display
+  led.shutdown(true);
+  delay(500);
+  // Power on the display
+  led.shutdown(false);
 }
 
 /**
