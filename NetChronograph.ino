@@ -24,7 +24,7 @@
 // Project name and version
 const char NODENAME[] = "NetChrono";
 const char nodename[] = "netchrono";
-const char VERSION[]  = "0.11";
+const char VERSION[]  = "0.12";
 
 // WiFi
 #include <ESP8266WiFi.h>
@@ -377,7 +377,7 @@ void setup() {
   led.fbWrite(0, mgsWelcome, sizeof(mgsWelcome) / sizeof(*mgsWelcome));
   led.fbDisplay();
   // Reduce the brightness progressively
-  for (uint8_t i = 15; i >= 2; i--) {
+  for (uint8_t i = 15; i >= 1; i--) {
     // Set the brightness
     led.intensity(i);
     delay(100);
@@ -472,14 +472,7 @@ void setup() {
 
   // Power off the display
   led.shutdown(true);
-  // Show the date, briefly
-  showDDLLYYYY();
-  delay(500);
-  // Power on the display
-  led.shutdown(false);
-  delay(2000);
-  // Power off the display
-  led.shutdown(true);
+  // Delay
   delay(500);
   // Power on the display
   led.shutdown(false);
