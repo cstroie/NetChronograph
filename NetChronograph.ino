@@ -336,6 +336,9 @@ void setup() {
   // Power on the display
   led.shutdown(false);
 
+  // Set the DHT pin mode to INPUT_PULLUP
+  dht.setPinInputMode(INPUT_PULLUP);
+
   /*
     // Display "NETCHRON"
     uint8_t mgsWelcome[] = {0x76, 0x4F, 0x70, 0x4E, 0x37, 0x46, 0x7E, 0x76};
