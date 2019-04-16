@@ -48,6 +48,7 @@ NTP ntp;
 // DHT11 sensor
 #include <SimpleDHT.h>
 bool                dhtOK         = false;        // The temperature/humidity sensor presence flag
+bool                dhtFahrenheit = false;        // Show temperature in Celsius / Fahrenheit
 const unsigned long dhtDelay      = 1000UL * 10;  // Delay between sensor readings
 const int           pinDHT        = 3;            // Temperature/humidity sensor input pin
 SimpleDHT11         dht(pinDHT);                  // The DHT22 temperature/humidity sensor
@@ -146,7 +147,10 @@ bool dhtRead(byte *temp, byte *hmdt, bool drop = false) {
     else {
       // Read and store
       if (dht.read(&t, &h, NULL) == SimpleDHTErrSuccess) {
-        *temp = t;
+        if (dhtFahrenheit)
+          *temp = (uint8_t)(((9 * (int)t) + 160) / 5);
+        else
+          *temp = t;
         *hmdt = h;
         dhtOK = true;
       }
@@ -220,7 +224,7 @@ bool showTimeTempHHMM() {
                      0x0A,
                      dhtOK ? (temp / 10) : 0x0E,
                      dhtOK ? (temp % 10) : 0x0E,
-                     0x0B
+                     dhtFahrenheit ? 0x0F : 0x0B
                     };
     led.fbPrint(0, msg, sizeof(msg) / sizeof(*msg));
     led.fbDisplay();
@@ -234,7 +238,7 @@ bool showTimeTempHHMM() {
       Serial.print(temp);
     else
       Serial.print("--");
-    Serial.print("c");
+    Serial.print(dhtFahrenheit ? "F" : "C");
     Serial.println();
 #endif
   }
