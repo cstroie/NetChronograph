@@ -175,8 +175,10 @@ bool showTimeHHMM() {
     bool ntpOK = ntp.isValid();
     // Compute the date an time
     datetime_t dt = ntp.getDateTime(utm);
-    // Display "  HHMM  "
-    uint8_t msg[] = {ntpOK ? (dt.hh / 10) : 0x0E, ntpOK ? (dt.hh % 10 + LED_DP) : (0x0E + LED_DP),
+    // Check if the time is accurate, flash the separator if so
+    uint8_t DOT = ((ntp.isAccurate() and (dt.ss & 0x01)) == true) ? 0x00 : LED_DP;
+    // Display "  HH.MM  "
+    uint8_t msg[] = {ntpOK ? (dt.hh / 10) : 0x0E, ntpOK ? (dt.hh % 10 + DOT) : (0x0E + DOT),
                      ntpOK ? (dt.mm / 10) : 0x0E, ntpOK ? (dt.mm % 10) : 0x0E
                     };
     led.fbPrint(2, msg, sizeof(msg) / sizeof(*msg));
@@ -184,7 +186,7 @@ bool showTimeHHMM() {
 #ifdef DEBUG
     if (!ntpOK) Serial.println(F("ERR: NTP"));
     Serial.print(dt.hh);
-    Serial.print(":");
+    Serial.print(DOT ? ":" : " ");
     Serial.print(dt.mm);
     Serial.println();
 #endif
@@ -207,11 +209,13 @@ bool showTimeTempHHMM() {
     bool ntpOK = ntp.isValid();
     // Compute the date an time
     datetime_t dt = ntp.getDateTime(utm);
+    // Check if the time is accurate, flash the separator if so
+    uint8_t DOT = ((ntp.isAccurate() and (dt.ss & 0x01)) == true) ? 0x00 : LED_DP;
     // Read the temperature
     static byte temp, hmdt;
     dhtRead(&temp, &hmdt);
-    // Display "HHMM TTc"
-    uint8_t msg[] = {ntpOK ? (dt.hh / 10) : 0x0E, ntpOK ? (dt.hh % 10 + LED_DP) : (0x0E + LED_DP),
+    // Display "HH.MM TTc"
+    uint8_t msg[] = {ntpOK ? (dt.hh / 10) : 0x0E, ntpOK ? (dt.hh % 10 + DOT) : (0x0E + DOT),
                      ntpOK ? (dt.mm / 10) : 0x0E, ntpOK ? (dt.mm % 10) : 0x0E,
                      0x0A,
                      dhtOK ? (temp / 10) : 0x0E,
@@ -223,7 +227,7 @@ bool showTimeTempHHMM() {
 #ifdef DEBUG
     if (!ntpOK) Serial.println(F("ERR: NTP"));
     Serial.print(dt.hh);
-    Serial.print(":");
+    Serial.print(DOT ? ":" : " ");
     Serial.print(dt.mm);
     Serial.print(" ");
     if (dhtOK)
@@ -252,10 +256,12 @@ bool showTimeHHMMSS() {
     bool ntpOK = ntp.isValid();
     // Compute the date an time
     datetime_t dt = ntp.getDateTime(utm);
+    // Check if the time is accurate, flash the separator if so
+    uint8_t DOT = ((ntp.isAccurate() and (dt.ss & 0x01)) == true) ? 0x00 : LED_DP;
     // Display
     led.fbClear();
-    uint8_t msg[] = {ntpOK ? (dt.hh / 10) : 0x0E, ntpOK ? (dt.hh % 10 + LED_DP) : (0x0E + LED_DP),
-                     ntpOK ? (dt.mm / 10) : 0x0E, ntpOK ? (dt.mm % 10 + LED_DP) : (0x0E + LED_DP),
+    uint8_t msg[] = {ntpOK ? (dt.hh / 10) : 0x0E, ntpOK ? (dt.hh % 10 + DOT) : (0x0E + DOT),
+                     ntpOK ? (dt.mm / 10) : 0x0E, ntpOK ? (dt.mm % 10 + DOT) : (0x0E + DOT),
                      ntpOK ? (dt.ss / 10) : 0x0E, ntpOK ? (dt.ss % 10) : 0x0E
                     };
     led.fbPrint(1, msg, sizeof(msg) / sizeof(*msg));
@@ -263,9 +269,9 @@ bool showTimeHHMMSS() {
 #ifdef DEBUG
     if (!ntpOK) Serial.println(F("ERR: NTP"));
     Serial.print(dt.hh);
-    Serial.print(":");
+    Serial.print(DOT ? ":" : " ");
     Serial.print(dt.mm);
-    Serial.print(":");
+    Serial.print(DOT ? ":" : " ");
     Serial.print(dt.ss);
     Serial.println();
 #endif
