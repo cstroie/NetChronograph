@@ -24,7 +24,7 @@
 // Project name and version
 const char NODENAME[] = "NetChrono";
 const char nodename[] = "netchrono";
-const char VERSION[]  = "0.10";
+const char VERSION[]  = "0.11";
 
 // WiFi
 #include <ESP8266WiFi.h>
@@ -37,9 +37,25 @@ const char VERSION[]  = "0.10";
 #include <ESP8266WebServer.h>     //Local WebServer used to serve the configuration portal
 #include <WiFiManager.h>          //https://github.com/tzapu/WiFiManager WiFi Configuration Magic
 
+// Safe values
+#ifndef SCR_DEF
+#define SCR_DEF 0
+#endif
+#ifndef NTP_SERVER
+#define NTP_SERVER    ("pool.ntp.org")
+#endif
+#ifndef NTP_PORT
+#define NTP_PORT      (123)
+#endif
+#ifndef NTP_TZ
+#define NTP_TZ        (0)
+#endif
+
 // LED driver for MAX7219
 #include "led.h"
 LED led;
+enum SCREENS {SCR_HHMM, SCR_HHMMSS, SCR_HHMMTT, SCR_DDLLYYYY, SCR_VCC, SCR_ALL};  // Screens
+uint8_t screen = SCR_DEF;               // The screen to display
 
 // Network Time Protocol
 #include "ntp.h"
@@ -168,7 +184,7 @@ bool dhtRead(byte *temp, byte *hmdt, bool drop = false) {
 /**
   Display the current time in HH.MM format
 */
-bool showTimeHHMM() {
+bool showHHMM() {
   // Keep the last UNIX time
   static unsigned long ltm = 0;
   // Get the date and time
@@ -202,7 +218,7 @@ bool showTimeHHMM() {
 /**
   Display the current time in HH.MM format and temperature
 */
-bool showTimeTempHHMM() {
+bool showHHMMTT() {
   // Keep the last UNIX time
   static unsigned long ltm = 0;
   // Get the date and time
@@ -251,7 +267,7 @@ bool showTimeTempHHMM() {
 /**
   Display the current time in HH.MM.SS format
 */
-bool showTimeHHMMSS() {
+bool showHHMMSS() {
   // Keep the last UNIX time
   static unsigned long ltm = 0;
   // Get the date and time
@@ -289,7 +305,7 @@ bool showTimeHHMMSS() {
 /**
   Display the current date in DD.LL.YYYY format
 */
-bool showDateDDLLYYYY() {
+bool showDDLLYYYY() {
   // Keep the last UNIX time
   static unsigned long ltm = 0;
   // Get the date and time
@@ -457,7 +473,7 @@ void setup() {
   // Power off the display
   led.shutdown(true);
   // Show the date, briefly
-  showDateDDLLYYYY();
+  showDDLLYYYY();
   delay(500);
   // Power on the display
   led.shutdown(false);
@@ -477,5 +493,21 @@ void loop() {
   ArduinoOTA.handle();
   yield();
 
-  showTimeTempHHMM();
+  // Choose the screen to display
+  switch (screen) {
+    case SCR_HHMM:
+      showHHMM();
+      break;
+    case SCR_HHMMSS:
+      showHHMMSS();
+      break;
+    case SCR_HHMMTT:
+      showHHMMTT();
+      break;
+    case SCR_DDLLYYYY:
+      showDDLLYYYY();
+      break;
+    default:
+      showHHMM();
+  }
 }
