@@ -24,7 +24,7 @@
 // Project name and version
 const char NODENAME[] = "NetChrono";
 const char nodename[] = "netchrono";
-const char VERSION[]  = "0.9";
+const char VERSION[]  = "0.10";
 
 // WiFi
 #include <ESP8266WiFi.h>
@@ -48,7 +48,8 @@ NTP ntp;
 // DHT11 sensor
 #include <SimpleDHT.h>
 bool                dhtOK         = false;        // The temperature/humidity sensor presence flag
-bool                dhtFahrenheit = false;        // Show temperature in Celsius / Fahrenheit
+bool                dhtDegF       = false;        // Show temperature in Celsius or Fahrenheit
+bool                dhtShowRH     = false;        // Show temperature and relative humidity, alternatively
 const unsigned long dhtDelay      = 1000UL * 10;  // Delay between sensor readings
 const int           pinDHT        = 3;            // Temperature/humidity sensor input pin
 SimpleDHT11         dht(pinDHT);                  // The DHT22 temperature/humidity sensor
@@ -147,7 +148,7 @@ bool dhtRead(byte *temp, byte *hmdt, bool drop = false) {
     else {
       // Read and store
       if (dht.read(&t, &h, NULL) == SimpleDHTErrSuccess) {
-        if (dhtFahrenheit)
+        if (dhtDegF)
           *temp = (uint8_t)(((9 * (int)t) + 160) / 5);
         else
           *temp = t;
@@ -218,13 +219,16 @@ bool showTimeTempHHMM() {
     // Read the temperature
     static byte temp, hmdt;
     dhtRead(&temp, &hmdt);
-    // Display "HH.MM TTc"
+    // Choose from temperature and humidity
+    bool dhtHT = dhtShowRH and (dt.ss & 0x02);
+    byte dhtVal = dhtHT ? hmdt : temp;
+    // Display "HH.MM TTc" or "HH.MM RH%" or "--.-- -- "
     uint8_t msg[] = {ntpOK ? (dt.hh / 10) : 0x0E, ntpOK ? (dt.hh % 10 + DOT) : (0x0E + DOT),
                      ntpOK ? (dt.mm / 10) : 0x0E, ntpOK ? (dt.mm % 10) : 0x0E,
                      0x0A,
-                     dhtOK ? (temp / 10) : 0x0E,
-                     dhtOK ? (temp % 10) : 0x0E,
-                     dhtFahrenheit ? 0x0F : 0x0B
+                     dhtOK ? (dhtVal / 10) : 0x0E,
+                     dhtOK ? (dhtVal % 10) : 0x0E,
+                     dhtOK ? (dhtHT ? 0x0D : (dhtDegF ? 0x0F : 0x0B)) : 0x0A
                     };
     led.fbPrint(0, msg, sizeof(msg) / sizeof(*msg));
     led.fbDisplay();
@@ -234,11 +238,10 @@ bool showTimeTempHHMM() {
     Serial.print(DOT ? ":" : " ");
     Serial.print(dt.mm);
     Serial.print(" ");
-    if (dhtOK)
-      Serial.print(temp);
-    else
-      Serial.print("--");
-    Serial.print(dhtFahrenheit ? "F" : "C");
+    if (dhtOK) Serial.print(dhtVal);
+    else       Serial.print("--");
+    if (dhtHT) Serial.print("%");
+    else       Serial.print(dhtDegF ? "F" : "C");
     Serial.println();
 #endif
   }
