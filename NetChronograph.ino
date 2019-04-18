@@ -24,7 +24,7 @@
 // Project name and version
 const char NODENAME[] = "NetChrono";
 const char nodename[] = "netchrono";
-const char VERSION[]  = "0.13";
+const char VERSION[]  = "0.14";
 
 // WiFi
 #include <ESP8266WiFi.h>
@@ -33,13 +33,13 @@ const char VERSION[]  = "0.13";
 #include <ESP8266mDNS.h>
 #include <ArduinoOTA.h>
 
-#include <DNSServer.h>            //Local DNS Server used for redirecting all requests to the configuration portal
-#include <ESP8266WebServer.h>     //Local WebServer used to serve the configuration portal
-#include <WiFiManager.h>          //https://github.com/tzapu/WiFiManager WiFi Configuration Magic
+#include <DNSServer.h>            // Local DNS Server used for redirecting all requests to the configuration portal
+#include <ESP8266WebServer.h>     // Local WebServer used to serve the configuration portal
+#include <WiFiManager.h>          // https://github.com/tzapu/WiFiManager WiFi Configuration Magic
 
 // Safe values
 #ifndef SCR_DEF
-#define SCR_DEF 0
+#define SCR_DEF SCR_HHMM
 #endif
 #ifndef NTP_SERVER
 #define NTP_SERVER    ("pool.ntp.org")
@@ -55,7 +55,9 @@ const char VERSION[]  = "0.13";
 #include "led.h"
 LED led;
 enum SCREENS {SCR_HHMM, SCR_HHMMSS, SCR_HHMMTT, SCR_DDLLYYYY, SCR_VCC, SCR_ALL};  // Screens
-uint8_t screen = SCR_DEF;               // The screen to display
+uint8_t scrDefault = SCR_DEF;                     // The default screen to display
+uint8_t scrCurrent = scrDefault;                  // The current screen to display
+uint8_t scrDelay = 5;                             // Time (in seconds) to return to the default screen
 
 // Network Time Protocol
 #include "ntp.h"
@@ -73,6 +75,10 @@ SimpleDHT11         dht(pinDHT);                  // The DHT22 temperature/humid
 // OTA
 int otaPort     = 8266;
 int otaProgress = -1;
+
+// Set ADC to Voltage
+ADC_MODE(ADC_VCC);
+const unsigned long vccDelay      = 1000UL;       // Delay between Vcc readings
 
 /**
   Try to connect to WiFi
@@ -244,7 +250,7 @@ bool showHHMMTT() {
                      0x0A,
                      dhtOK ? (dhtVal / 10) : 0x0E,
                      dhtOK ? (dhtVal % 10) : 0x0E,
-                     dhtOK ? (dhtHT ? 0x0D : (dhtDegF ? 0x0F : 0x0B)) : 0x0A
+                     dhtOK ? (dhtHT ? 0x0D : (dhtDegF ? 0x0F : 0x0C)) : 0x0A
                     };
     led.fbPrint(0, msg, sizeof(msg) / sizeof(*msg));
     led.fbDisplay();
@@ -334,6 +340,38 @@ bool showDDLLYYYY() {
     Serial.print(dt.yy + 2000);
     Serial.println();
 #endif
+  }
+  return true;
+}
+
+/**
+  Display the voltage V.vvvU format
+*/
+bool showVcc() {
+  static uint32_t nextTime = 0;
+
+  if (millis() >= nextTime) {
+    // Read the Vcc (mV)
+    int vcc = ESP.getVcc();
+    // Display
+    uint8_t data[] = {0x00, 0x00, 0x00,
+                      (vcc / 1000) + LED_DP,
+                      (vcc % 1000) / 100,
+                      (vcc % 100) / 10,
+                      (vcc % 10),
+                      0x0B,
+                     };
+    led.fbPrint(0, data, sizeof(data) / sizeof(*data));
+    led.fbDisplay();
+#ifdef DEBUG
+    Serial.print(vcc / 1000);
+    Serial.print(".");
+    Serial.print(vcc % 1000);
+    Serial.print("V");
+    Serial.println();
+#endif
+    // Repeat after the delay
+    nextTime += vccDelay;
   }
   return true;
 }
@@ -487,7 +525,7 @@ void loop() {
   yield();
 
   // Choose the screen to display
-  switch (screen) {
+  switch (scrCurrent) {
     case SCR_HHMM:
       showHHMM();
       break;
@@ -499,6 +537,9 @@ void loop() {
       break;
     case SCR_DDLLYYYY:
       showDDLLYYYY();
+      break;
+    case SCR_VCC:
+      showVcc();
       break;
     default:
       showHHMM();
