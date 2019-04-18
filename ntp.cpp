@@ -100,14 +100,14 @@ unsigned long NTP::getSeconds(bool sync) {
       nextSync = millis() + 1000UL * 60UL * 60UL * 8;
       accurate = true;
       // Get the DST first and last seconds in UNIX time
-      getDST(utm);
+      if (dstAdjust) getDST(utm);
     }
   }
   // Get current time based on uptime and time delta,
   // or just uptime for no time sync ever
   unsigned long result = (millis() / 1000) + delta;
-  // Adjust for DST
-  if (isDST(result))
+  // Adjust for DST, if needed
+  if (dstAdjust and isDST(result))
     result += 3600UL;
   // Adjust for time zone
   result += (long)(TZ * 3600UL);
@@ -334,6 +334,17 @@ bool NTP::isDST(uint16_t year, uint8_t month, uint8_t day, uint8_t hour) {
 */
 bool NTP::isDST(unsigned long utm) {
   return (utm >= dstBegin) and (utm < dstEnd);
+}
+
+/**
+  Specify wheter we should check and do DST adjustments or not
+
+  @param yesno check DST or not
+*/
+void NTP::doDST(bool yesno) {
+  dstAdjust = yesno;
+  // Re-calculate if enabled
+  if (dstAdjust) getSeconds(true);
 }
 
 /**

@@ -24,7 +24,7 @@
 // Project name and version
 const char NODENAME[] = "NetChrono";
 const char nodename[] = "netchrono";
-const char VERSION[]  = "0.12";
+const char VERSION[]  = "0.13";
 
 // WiFi
 #include <ESP8266WiFi.h>

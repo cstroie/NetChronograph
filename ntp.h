@@ -54,6 +54,7 @@ class NTP {
     void          getDST(unsigned long utm);
     bool          isDST(uint16_t year, uint8_t month, uint8_t day, uint8_t hour);
     bool          isDST(unsigned long utm);
+    void          doDST(bool yesno);
     bool          isAccurate();
     bool          isValid();
     uint8_t       dstBeginDay;                        // The last Sunday in March
@@ -63,11 +64,12 @@ class NTP {
   private:
     unsigned long getNTP();
     char          server[50];                         // NTP server to connect to (RFC5905)
-    int           port     = 123;                     // NTP port
-    unsigned long nextSync = 0UL;                     // Next time to syncronize
-    unsigned long delta    = 0UL;                     // Difference between real time and internal clock
-    float         TZ       = 0;                       // Time zone
-    bool          accurate = false;                   // Flag to know the time is accurate (sync succeeded)
+    int           port      = 123;                    // NTP port
+    unsigned long nextSync  = 0UL;                    // Next time to syncronize
+    unsigned long delta     = 0UL;                    // Difference between real time and internal clock
+    float         TZ        = 0;                      // Time zone
+    bool          dstAdjust = true;                   // Flag to know whether we should do DST adjustments
+    bool          accurate  = false;                  // Flag to know the time is accurate (sync succeeded)
 };
 
 #endif /* NTP_H */
