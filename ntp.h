@@ -24,6 +24,7 @@
 #define FROM_1970_TO_2000 (946684800UL)
 
 #include "Arduino.h"
+#include <ESP8266WiFi.h>
 #include <WiFiUdp.h>
 
 static const uint8_t daysInMonth[] PROGMEM = {31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31};

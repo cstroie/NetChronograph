@@ -127,15 +127,17 @@ unsigned long NTP::getSeconds(bool sync) {
   The Unix time is returned, that is, seconds from 1970-01-01T00:00.
 */
 unsigned long NTP::getNTP() {
+  // Fail if not connected to AP
+  if (!WiFi.isConnected()) return 0UL;
   // NTP UDP client
   WiFiUDP client;
   // Open socket on arbitrary port
   bool ok = client.begin(12321);
+  // Fail if UDP could not init a socket
+  if (!ok) return 0UL;
   // NTP request header: Only the first four bytes of an outgoing
   // packet need to be set appropriately, the rest can be whatever.
   const long ntpFirstFourBytes = 0xEC0600E3;
-  // Fail if UDP could not init a socket
-  if (!ok) return 0UL;
   // Clear received data from possible stray received packets
   client.flush();
   // Send an NTP request
