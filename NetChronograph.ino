@@ -67,7 +67,7 @@ NTP ntp;
 #include <SimpleDHT.h>
 bool                dhtOK         = false;        // The temperature/humidity sensor presence flag
 bool                dhtDegF       = false;        // Show temperature in Celsius or Fahrenheit
-bool                dhtShowRH     = false;        // Show temperature and relative humidity, alternatively
+bool                dhtShowRH     = true;         // Show temperature and relative humidity, alternatively
 const unsigned long dhtDelay      = 1000UL * 10;  // Delay between sensor readings
 const int           pinDHT        = 3;            // Temperature/humidity sensor input pin
 SimpleDHT11         dht(pinDHT);                  // The DHT22 temperature/humidity sensor
@@ -242,7 +242,7 @@ bool showHHMMTT() {
     static byte temp, hmdt;
     dhtRead(&temp, &hmdt);
     // Choose from temperature and humidity
-    bool dhtHT = dhtShowRH and (dt.ss & 0x02);
+    bool dhtHT = dhtShowRH and (dt.ss & 0x04);
     byte dhtVal = dhtHT ? hmdt : temp;
     // Display "HH.MM TTc" or "HH.MM RH%" or "--.-- -- "
     uint8_t msg[] = {ntpOK ? (dt.hh / 10) : 0x0E, ntpOK ? (dt.hh % 10 + DOT) : (0x0E + DOT),
