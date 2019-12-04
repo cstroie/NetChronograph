@@ -24,7 +24,7 @@
 // Project name and version
 const char NODENAME[] = "NetChrono";
 const char nodename[] = "netchrono";
-const char VERSION[]  = "0.14";
+const char VERSION[]  = "0.15";
 
 // WiFi
 #include <ESP8266WiFi.h>
@@ -39,7 +39,10 @@ const char VERSION[]  = "0.14";
 
 // Safe values
 #ifndef SCR_DEF
-#define SCR_DEF SCR_HHMM
+#define SCR_DEF       SCR_HHMM
+#endif
+#ifndef SCR_BRGHT
+#define SCR_BRGHT     1
 #endif
 #ifndef NTP_SERVER
 #define NTP_SERVER    ("pool.ntp.org")
@@ -63,14 +66,17 @@ uint8_t scrDelay = 5;                             // Time (in seconds) to return
 #include "ntp.h"
 NTP ntp;
 
-// DHT11 sensor
-#include <SimpleDHT.h>
-bool                dhtOK         = false;        // The temperature/humidity sensor presence flag
-bool                dhtDegF       = false;        // Show temperature in Celsius or Fahrenheit
-bool                dhtShowRH     = true;         // Show temperature and relative humidity, alternatively
-const unsigned long dhtDelay      = 1000UL * 10;  // Delay between sensor readings
-const int           pinDHT        = 3;            // Temperature/humidity sensor input pin
-SimpleDHT11         dht(pinDHT);                  // The DHT22 temperature/humidity sensor
+// DS18B20 sensor
+#include <OneWire.h>
+#include <DallasTemperature.h>
+#define ONE_WIRE_BUS 3                  // Data wire is plugged into pin 3
+OneWire oneWire(ONE_WIRE_BUS);          // Setup a oneWire instance to communicate with any OneWire devices (not just Maxim/Dallas temperature ICs)
+DallasTemperature sensors(&oneWire);    // Pass our oneWire reference to Dallas Temperature.
+DeviceAddress     dsAddr;               // The detected DS18B20 address
+int16_t           dsVal   = 0;          // Will use integer temperature
+bool              dsOK    = true;       // The temperature sensor presence flag
+bool              dsDegF  = false;      // Show temperature in Celsius or Fahrenheit
+uint8_t           dsDelay = 2;          // Delay between sensor readings (in seconds)
 
 // OTA
 int otaPort     = 8266;
@@ -151,40 +157,28 @@ void wifiConnect(int timeout = 300) {
 }
 
 /**
-  Read the DHT22 sensor
-
-  @param temp temperature
-  @param hmdt humidity
-  @param drop drop the reading (read twice)
+  Read the DS18B20 sensor
   @return success
 */
-bool dhtRead(byte *temp, byte *hmdt, bool drop = false) {
+bool dsRead() {
   static uint32_t nextTime = 0;
 
   if (millis() >= nextTime) {
-    byte t = 0, h = 0;
-    dhtOK = false;
-    if (drop)
-      // Read and drop
-      dht.read(NULL, NULL, NULL);
-    else {
-      // Read and store
-      if (dht.read(&t, &h, NULL) == SimpleDHTErrSuccess) {
-        if (dhtDegF)
-          *temp = (uint8_t)(((9 * (int)t) + 160) / 5);
-        else
-          *temp = t;
-        *hmdt = h;
-        dhtOK = true;
-      }
+    if (sensors.isConnected(dsAddr)) {
+      sensors.requestTemperaturesByAddress(dsAddr);
+      dsVal = sensors.getTemp((uint8_t*) dsAddr) / 128;
+      dsOK = true;
     }
+    else
+      dsOK = false;
+
 #ifdef DEBUG
-    if (!dhtOK) Serial.println(F("ERR: DHT11"));
+    if (!dsOK) Serial.println(F("ERR: DS18B20"));
 #endif
     // Repeat after the delay
-    nextTime += dhtDelay;
+    nextTime += dsDelay * 1000UL;
   }
-  return dhtOK;
+  return dsOK;
 }
 
 /**
@@ -239,18 +233,14 @@ bool showHHMMTT() {
     // Check if the time is accurate, flash the separator if so
     uint8_t DOT = ((ntp.isAccurate() and (dt.ss & 0x01)) == true) ? 0x00 : LED_DP;
     // Read the temperature
-    static byte temp, hmdt;
-    dhtRead(&temp, &hmdt);
-    // Choose from temperature and humidity
-    bool dhtHT = dhtShowRH and (dt.ss & 0x04);
-    byte dhtVal = dhtHT ? hmdt : temp;
-    // Display "HH.MM TTc" or "HH.MM RH%" or "--.-- -- "
+    dsOK = dsRead();
+    // Display "HH.MM TTc" or "--.-- -- "
     uint8_t msg[] = {ntpOK ? (dt.hh / 10) : 0x0E, ntpOK ? (dt.hh % 10 + DOT) : (0x0E + DOT),
                      ntpOK ? (dt.mm / 10) : 0x0E, ntpOK ? (dt.mm % 10) : 0x0E,
                      0x0A,
-                     dhtOK ? (dhtVal / 10) : 0x0E,
-                     dhtOK ? (dhtVal % 10) : 0x0E,
-                     dhtOK ? (dhtHT ? 0x0D : (dhtDegF ? 0x0F : 0x0C)) : 0x0A
+                     dsOK ? (dsVal / 10) : 0x0E,
+                     dsOK ? (dsVal % 10) : 0x0E,
+                     dsOK ? (dsDegF ? 0x0F : 0x0C) : 0x0A
                     };
     led.fbPrint(0, msg, sizeof(msg) / sizeof(*msg));
     led.fbDisplay();
@@ -260,10 +250,9 @@ bool showHHMMTT() {
     Serial.print(DOT ? ":" : " ");
     Serial.print(dt.mm);
     Serial.print(" ");
-    if (dhtOK) Serial.print(dhtVal);
-    else       Serial.print("--");
-    if (dhtHT) Serial.print("%");
-    else       Serial.print(dhtDegF ? "F" : "C");
+    if (dsOK) Serial.print(dsVal);
+    else      Serial.print("--");
+    Serial.print(dsDegF ? "F" : "C");
     Serial.println();
 #endif
   }
@@ -403,8 +392,10 @@ void setup() {
   // Power on the display
   led.shutdown(false);
 
-  // Set the DHT pin mode to INPUT_PULLUP
-  dht.setPinInputMode(INPUT_PULLUP);
+  // Start up the OW sensors
+  sensors.begin();
+  // The first sensor is the DS18B20 temperature sensor and the only one
+  sensors.getAddress(dsAddr, 0);
 
   /*
     // Display "NETCHRON"
@@ -415,7 +406,7 @@ void setup() {
   led.fbWrite(0, mgsWelcome, sizeof(mgsWelcome) / sizeof(*mgsWelcome));
   led.fbDisplay();
   // Reduce the brightness progressively
-  for (uint8_t i = 15; i >= 1; i--) {
+  for (uint8_t i = 15; i >= SCR_BRGHT; i--) {
     // Set the brightness
     led.intensity(i);
     delay(100);
