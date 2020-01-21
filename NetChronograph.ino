@@ -24,7 +24,7 @@
 // Project name and version
 const char NODENAME[] = "NetChrono";
 const char nodename[] = "netchrono";
-const char VERSION[]  = "0.15";
+const char VERSION[]  = "0.16";
 
 // WiFi
 #include <ESP8266WiFi.h>
@@ -58,9 +58,9 @@ const char VERSION[]  = "0.15";
 #include "led.h"
 LED led;
 enum SCREENS {SCR_HHMM, SCR_HHMMSS, SCR_HHMMTT, SCR_DDLLYYYY, SCR_VCC, SCR_ALL};  // Screens
-uint8_t scrDefault = SCR_DEF;                     // The default screen to display
-uint8_t scrCurrent = scrDefault;                  // The current screen to display
-uint8_t scrDelay = 5;                             // Time (in seconds) to return to the default screen
+uint8_t scrDefault = SCR_DEF;           // The default screen to display
+uint8_t scrCurrent = scrDefault;        // The current screen to display
+uint8_t scrDelay   = 5;                 // Time (in seconds) to return to the default screen
 
 // Network Time Protocol
 #include "ntp.h"
@@ -84,7 +84,7 @@ int otaProgress = -1;
 
 // Set ADC to Voltage
 ADC_MODE(ADC_VCC);
-const unsigned long vccDelay      = 1000UL;       // Delay between Vcc readings
+const unsigned long vccDelay = 1000UL;  // Delay between Vcc readings
 
 /**
   Try to connect to WiFi
@@ -164,14 +164,15 @@ bool dsRead() {
   static uint32_t nextTime = 0;
 
   if (millis() >= nextTime) {
+    dsOK = false;
     if (sensors.isConnected(dsAddr)) {
       sensors.requestTemperaturesByAddress(dsAddr);
       dsVal = sensors.getTemp((uint8_t*) dsAddr) / 128;
+      // Convert to Fahrenheit, if needed
+      if (dsDegF)
+        dsVal = ((9 * dsVal) + 160) / 5;
       dsOK = true;
     }
-    else
-      dsOK = false;
-
 #ifdef DEBUG
     if (!dsOK) Serial.println(F("ERR: DS18B20"));
 #endif
@@ -198,10 +199,13 @@ bool showHHMM() {
     datetime_t dt = ntp.getDateTime(utm);
     // Check if the time is accurate, flash the separator if so
     uint8_t DOT = ((ntp.isAccurate() and (dt.ss & 0x01)) == true) ? 0x00 : LED_DP;
-    // Display "  HH.MM  "
-    uint8_t msg[] = {ntpOK ? (dt.hh / 10) : 0x0E, ntpOK ? (dt.hh % 10 + DOT) : (0x0E + DOT),
-                     ntpOK ? (dt.mm / 10) : 0x0E, ntpOK ? (dt.mm % 10) : 0x0E
+    // Display "  HH.MM  " or "  --.--  "
+    uint8_t msg[] = {ntpOK ? (dt.hh / 10) : CHR_M,
+                     ntpOK ? (dt.hh % 10 + DOT) : (CHR_M + DOT),
+                     ntpOK ? (dt.mm / 10) : CHR_M,
+                     ntpOK ? (dt.mm % 10) : CHR_M
                     };
+    led.fbClear();
     led.fbPrint(2, msg, sizeof(msg) / sizeof(*msg));
     led.fbDisplay();
 #ifdef DEBUG
@@ -235,12 +239,14 @@ bool showHHMMTT() {
     // Read the temperature
     dsOK = dsRead();
     // Display "HH.MM TTc" or "--.-- -- "
-    uint8_t msg[] = {ntpOK ? (dt.hh / 10) : 0x0E, ntpOK ? (dt.hh % 10 + DOT) : (0x0E + DOT),
-                     ntpOK ? (dt.mm / 10) : 0x0E, ntpOK ? (dt.mm % 10) : 0x0E,
-                     0x0A,
-                     dsOK ? (dsVal / 10) : 0x0E,
-                     dsOK ? (dsVal % 10) : 0x0E,
-                     dsOK ? (dsDegF ? 0x0F : 0x0C) : 0x0A
+    uint8_t msg[] = {ntpOK ? (dt.hh / 10) : CHR_M,                      // tenths of hours
+                     ntpOK ? (dt.hh % 10 + DOT) : (CHR_M + DOT),        // units of hours
+                     ntpOK ? (dt.mm / 10) : CHR_M,                      // tenths of minutes
+                     ntpOK ? (dt.mm % 10) : CHR_M,                      // units of minutes
+                     dsOK ? (dsVal < -9 ? CHR_M : CHR_S) : CHR_S,       // '-' if temp is below -9, space otherwise
+                     dsOK ? (dsVal < -9 ? (dsVal / 10) : CHR_M) : CHR_M,// tenths of temp if below -10 or over 10, '-' otherwise
+                     dsOK ? (dsVal % 10) : CHR_M,                       // units of temp
+                     dsOK ? (dsDegF ? CHR_F : CHR_C) : CHR_S            // C or F
                     };
     led.fbPrint(0, msg, sizeof(msg) / sizeof(*msg));
     led.fbDisplay();
@@ -276,12 +282,15 @@ bool showHHMMSS() {
     datetime_t dt = ntp.getDateTime(utm);
     // Check if the time is accurate, flash the separator if so
     uint8_t DOT = ((ntp.isAccurate() and (dt.ss & 0x01)) == true) ? 0x00 : LED_DP;
-    // Display
-    led.fbClear();
-    uint8_t msg[] = {ntpOK ? (dt.hh / 10) : 0x0E, ntpOK ? (dt.hh % 10 + DOT) : (0x0E + DOT),
-                     ntpOK ? (dt.mm / 10) : 0x0E, ntpOK ? (dt.mm % 10 + DOT) : (0x0E + DOT),
-                     ntpOK ? (dt.ss / 10) : 0x0E, ntpOK ? (dt.ss % 10) : 0x0E
+    // Display " HH.MM.SS " or " --.--.-- "
+    uint8_t msg[] = {ntpOK ? (dt.hh / 10) : CHR_M,
+                     ntpOK ? (dt.hh % 10 + DOT) : (CHR_M + DOT),
+                     ntpOK ? (dt.mm / 10) : CHR_M,
+                     ntpOK ? (dt.mm % 10 + DOT) : (CHR_M + DOT),
+                     ntpOK ? (dt.ss / 10) : CHR_M,
+                     ntpOK ? (dt.ss % 10) : CHR_M
                     };
+    led.fbClear();
     led.fbPrint(1, msg, sizeof(msg) / sizeof(*msg));
     led.fbDisplay();
 #ifdef DEBUG
@@ -312,11 +321,15 @@ bool showDDLLYYYY() {
     bool ntpOK = ntp.isValid();
     // Compute the date an time
     datetime_t dt = ntp.getDateTime(utm);
-    // Display
-    uint8_t data[] = {ntpOK ? (dt.dd / 10) : 0x0E, ntpOK ? (dt.dd % 10 + LED_DP) : (0x0E + LED_DP),
-                      ntpOK ? (dt.ll / 10) : 0x0E, ntpOK ? (dt.ll % 10 + LED_DP) : (0x0E + LED_DP),
-                      ntpOK ? 0x02 : 0x0E, ntpOK ? 0x00 : 0x0E,
-                      ntpOK ? (dt.yy / 10) : 0x0E, ntpOK ? dt.yy % 10 : 0x0E,
+    // Display "DD.MM.YYYY" or "--.--.----"
+    uint8_t data[] = {ntpOK ? (dt.dd / 10) : CHR_M,
+                      ntpOK ? (dt.dd % 10 + LED_DP) : (CHR_M + LED_DP),
+                      ntpOK ? (dt.ll / 10) : CHR_M,
+                      ntpOK ? (dt.ll % 10 + LED_DP) : (CHR_M + LED_DP),
+                      ntpOK ? 0x02 : CHR_M,
+                      ntpOK ? 0x00 : CHR_M,
+                      ntpOK ? (dt.yy / 10) : CHR_M,
+                      ntpOK ? dt.yy % 10 : CHR_M,
                      };
     led.fbPrint(0, data, sizeof(data) / sizeof(*data));
     led.fbDisplay();
@@ -342,13 +355,13 @@ bool showVcc() {
   if (millis() >= nextTime) {
     // Read the Vcc (mV)
     int vcc = ESP.getVcc();
-    // Display
+    // Display "   X.xxxV"
     uint8_t data[] = {0x00, 0x00, 0x00,
                       (vcc / 1000) + LED_DP,
                       (vcc % 1000) / 100,
                       (vcc % 100) / 10,
                       (vcc % 10),
-                      0x0B,
+                      CHR_V,
                      };
     led.fbPrint(0, data, sizeof(data) / sizeof(*data));
     led.fbDisplay();
