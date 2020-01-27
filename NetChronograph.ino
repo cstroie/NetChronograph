@@ -24,7 +24,7 @@
 // Project name and version
 const char NODENAME[] = "NetChrono";
 const char nodename[] = "netchrono";
-const char VERSION[]  = "0.16";
+const char VERSION[]  = "0.17";
 
 // WiFi
 #include <ESP8266WiFi.h>
@@ -239,14 +239,14 @@ bool showHHMMTT() {
     // Read the temperature
     dsOK = dsRead();
     // Display "HH.MM TTc" or "--.-- -- "
-    uint8_t msg[] = {ntpOK ? (dt.hh / 10) : CHR_M,                      // tenths of hours
-                     ntpOK ? (dt.hh % 10 + DOT) : (CHR_M + DOT),        // units of hours
-                     ntpOK ? (dt.mm / 10) : CHR_M,                      // tenths of minutes
-                     ntpOK ? (dt.mm % 10) : CHR_M,                      // units of minutes
-                     dsOK ? (dsVal < -9 ? CHR_M : CHR_S) : CHR_S,       // '-' if temp is below -9, space otherwise
-                     dsOK ? (dsVal < -9 ? (dsVal / 10) : CHR_M) : CHR_M,// tenths of temp if below -10 or over 10, '-' otherwise
-                     dsOK ? (dsVal % 10) : CHR_M,                       // units of temp
-                     dsOK ? (dsDegF ? CHR_F : CHR_C) : CHR_S            // C or F
+    uint8_t msg[] = {ntpOK ? (dt.hh / 10) : CHR_M,                                                  // tenths of hours
+                     ntpOK ? (dt.hh % 10 + DOT) : (CHR_M + DOT),                                    // units of hours
+                     ntpOK ? (dt.mm / 10) : CHR_M,                                                  // tenths of minutes
+                     ntpOK ? (dt.mm % 10) : CHR_M,                                                  // units of minutes
+                     dsOK ? (dsVal < -9 ? CHR_M : CHR_S) : CHR_S,                                   // '-' if temp is below -9, space otherwise
+                     dsOK ? (abs(dsVal) > 9 ? (dsVal / 10) : (dsVal < 0 ? CHR_M : CHR_S)) : CHR_M,  // tenths of temp if below -10 or over 10, '-' or ' ' otherwise
+                     dsOK ? (dsVal % 10) : CHR_M,                                                   // units of temp
+                     dsOK ? (dsDegF ? CHR_F : CHR_C) : CHR_S                                        // C or F
                     };
     led.fbPrint(0, msg, sizeof(msg) / sizeof(*msg));
     led.fbDisplay();
