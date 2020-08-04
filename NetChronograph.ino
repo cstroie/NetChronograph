@@ -59,9 +59,9 @@ const char VERSION[]  = "0.18";
 #ifndef MQTT_SERVER
 #define MQTT_SERVER   ("test.mosquitto.org")
 #endif
-#ifndef USE_MQTT_SSL
-#define USE_MQTT_SSL
-#endif
+//#ifndef USE_MQTT_SSL
+//#define USE_MQTT_SSL
+//#endif
 
 // LED driver for MAX7219
 #include "led.h"
@@ -100,6 +100,12 @@ unsigned long       mqttNextTime   = 0UL;                       // Next time to 
 const char          mqttTopicCmd[] = "command";
 const char          mqttTopicSns[] = "sensor/netchrono";
 const char          mqttTopicRpt[] = "report";
+
+// Mozilla Location Services
+#include "mls.h"
+MLS mls;
+const unsigned long mlsDelay    = 60 * 1000UL;                           // Delay between geolocations
+unsigned long       mlsNextTime = 0UL;                                    // Next time to geolocate
 
 // Sensors
 const unsigned long snsDelay    = 300 * 1000UL;                           // Delay between sensor readings
@@ -715,6 +721,9 @@ void setup() {
   // Power on the display
   led.shutdown(false);
 
+  // Start geolocation
+  mlsNextTime = millis();
+
   // Start the sensor timer
   snsNextTime = millis();
 }
@@ -770,6 +779,40 @@ void loop() {
     mqttPubRet(text, topic, "vcc");
     // Add the WiFi topic and publish the RSSI value
     mqttPubRet(rssi, topic, "wifi", "rssi");
+  }
+
+  // Geolocate and publis the coordinates
+  if (millis() >= mlsNextTime) {
+    // Repeat geolocation after the delay
+    mlsNextTime += mlsDelay;
+    // Scan the WiFi access points
+    int found = mls.wifiScan(false);
+    // Get the coordinates
+    if (found > 0) {
+      // Geolocate
+      int acc = mls.geoLocation();
+      if (mls.current.valid) {
+#ifdef DEBUG
+        // Report
+        Serial.print("Lat ");
+        Serial.print(mls.current.latitude, 6);
+        Serial.print(" Lon ");
+        Serial.print(mls.current.longitude, 6);
+        Serial.print(" Loc ");
+        Serial.print(mls.locator);
+        Serial.print(" Acc ");
+        Serial.print(acc);
+        Serial.println();
+#endif
+        // Create the reporting topic
+        char topic[32] = "";
+        char text[32] = "";
+        strncpy(topic, mqttTopicRpt, sizeof(topic));
+        strcat(topic, "/");
+        strcat(topic, nodename);
+        mqttPubRet(mls.locator, topic, "geo", "locator");
+      }
+    }
   }
 
   // Choose the screen to display
