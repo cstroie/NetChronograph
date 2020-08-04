@@ -24,7 +24,7 @@
 // Project name and version
 const char NODENAME[] = "NetChrono";
 const char nodename[] = "netchrono";
-const char VERSION[]  = "0.17";
+const char VERSION[]  = "0.18";
 
 // WiFi
 #include <ESP8266WiFi.h>
@@ -53,6 +53,15 @@ const char VERSION[]  = "0.17";
 #ifndef NTP_TZ
 #define NTP_TZ        (0)
 #endif
+#ifndef MQTT_ID
+#define MQTT_ID       ("netchrono")
+#endif
+#ifndef MQTT_SERVER
+#define MQTT_SERVER   ("test.mosquitto.org")
+#endif
+#ifndef USE_MQTT_SSL
+#define USE_MQTT_SSL
+#endif
 
 // LED driver for MAX7219
 #include "led.h"
@@ -65,6 +74,36 @@ uint8_t scrDelay   = 5;                 // Time (in seconds) to return to the de
 // Network Time Protocol
 #include "ntp.h"
 NTP ntp;
+
+// MQTT
+#include <PubSubClient.h>
+#ifdef USE_MQTT_SSL
+WiFiClientSecure    wifiClient;                                 // Secure WiFi TCP client for MQTT
+#else
+WiFiClient          wifiClient;                                 // Plain WiFi TCP client for MQTT
+#endif
+PubSubClient        mqttClient(wifiClient);                     // MQTT client, based on WiFi client
+#ifdef DEVEL
+const char          mqttId[]       = MQTT_ID "-dev";            // Development MQTT client ID
+#else
+const char          mqttId[]       = MQTT_ID;                   // Production MQTT client ID
+#endif
+char                mqttServer[40] = MQTT_SERVER;               // MQTT server address to connect to
+#ifdef USE_MQTT_SSL
+const int           mqttPort       = 8883;                      // Secure MQTT port
+#else
+const int           mqttPort       = 1883;                      // Plain MQTT port
+#endif
+const unsigned long mqttDelay      = 5000UL;                    // Delay between reconnection attempts
+unsigned long       mqttNextTime   = 0UL;                       // Next time to reconnect
+// Various MQTT topics
+const char          mqttTopicCmd[] = "command";
+const char          mqttTopicSns[] = "sensor/netchrono";
+const char          mqttTopicRpt[] = "report";
+
+// Sensors
+const unsigned long snsDelay    = 300 * 1000UL;                           // Delay between sensor readings
+unsigned long       snsNextTime = 0UL;                                    // Next time to read the sensors
 
 // DS18B20 sensor
 #include <OneWire.h>
@@ -85,6 +124,14 @@ int otaProgress = -1;
 // Set ADC to Voltage
 ADC_MODE(ADC_VCC);
 const unsigned long vccDelay = 1000UL;  // Delay between Vcc readings
+
+/**
+  Convert IPAddress to char array
+*/
+char charIP(const IPAddress ip, char *buf, size_t len, boolean pad = false) {
+  if (pad) snprintf_P(buf, len, PSTR("%3d.%3d.%3d.%3d"), ip[0], ip[1], ip[2], ip[3]);
+  else     snprintf_P(buf, len, PSTR("%d.%d.%d.%d"),     ip[0], ip[1], ip[2], ip[3]);
+}
 
 /**
   Try to connect to WiFi
@@ -139,6 +186,9 @@ void wifiConnect(int timeout = 300) {
       // Use the WiFi manager
       WiFiManager wifiManager;
       wifiManager.setTimeout(timeout);
+      // Add support for mqtt server
+      WiFiManagerParameter custom_mqtt_server("server", "MQTT server", mqttServer, 40);
+      wifiManager.addParameter(&custom_mqtt_server);
       //wifiManager.setAPCallback(wifiCallback);
 #ifndef DEBUG
       wifiManager.setDebugOutput(false);
@@ -152,8 +202,148 @@ void wifiConnect(int timeout = 300) {
         ESP.reset();
         delay(5000);
       }
+      // Copy the MQTT server address
+      strncpy(mqttServer, custom_mqtt_server.getValue(), 40);
     }
   }
+}
+
+/**
+  Publish char array to topic
+*/
+boolean mqttPub(const char *payload, const char *lvl1, const char *lvl2 = NULL, const char *lvl3 = NULL, const boolean retain = false) {
+  const int bufSize = 100;
+  char buf[bufSize] = "";
+  strncpy(buf, lvl1, bufSize);
+  if (lvl2 != NULL) {
+    strcat(buf, "/");
+    strncat(buf, lvl2, bufSize - strlen(buf) - 1);
+  }
+  if (lvl3 != NULL) {
+    strcat(buf, "/");
+    strncat(buf, lvl3, bufSize - strlen(buf) - 1);
+  }
+  yield();
+  return mqttClient.publish(buf, payload, retain);
+}
+
+/**
+  Publish char array to topic and retain
+*/
+boolean mqttPubRet(const char *payload, const char *lvl1, const char *lvl2 = NULL, const char *lvl3 = NULL, const boolean retain = true) {
+  return mqttPub(payload, lvl1, lvl2, lvl3, retain);
+}
+
+/**
+  Publish integer to topic
+*/
+boolean mqttPub(const int payload, const char *lvl1, const char *lvl2 = NULL, const char *lvl3 = NULL, const boolean retain = false) {
+  const int bufSize = 16;
+  char buf[bufSize] = "";
+  snprintf(buf, bufSize, "%d", payload);
+  return mqttPub(buf, lvl1, lvl2, lvl3, retain);
+}
+
+/**
+  Publish integer to topic and retain
+*/
+boolean mqttPubRet(const int payload, const char *lvl1, const char *lvl2 = NULL, const char *lvl3 = NULL, const boolean retain = true) {
+  return mqttPub(payload, lvl1, lvl2, lvl3, retain);
+}
+
+/**
+  Subscribe to topic or topic/subtopic
+*/
+void mqttSubscribe(const char *lvl1, const char *lvl2 = NULL, bool all = false) {
+  const int bufSize = 100;
+  char buf[bufSize] = "";
+  strncpy(buf, lvl1, bufSize);
+  if (lvl2 != NULL) {
+    strcat(buf, "/");
+    strncat(buf, lvl2, bufSize - strlen(buf) - 1);
+  }
+  if (all) strcat(buf, "/#");
+  mqttClient.subscribe(buf);
+}
+
+/**
+  Try to reconnect to MQTT server
+
+  @return boolean reconnection success
+*/
+boolean mqttReconnect() {
+#ifdef DEBUG
+  Serial.println(F("MQTT connecting..."));
+#endif
+  const int bufSize = 64;
+  char buf[bufSize] = "";
+  // The report topic
+  strncpy(buf, mqttTopicRpt, bufSize);
+  strcat(buf, "/");
+  strcat(buf, nodename);
+  // Connect and set LWM to "offline"
+  if (mqttClient.connect(mqttId, buf, 0, true, "offline")) {
+    // Publish the "online" status
+    mqttPubRet("online", buf);
+    // Publish the connection report
+    strcat_P(buf, PSTR("/wifi"));
+    mqttPubRet(WiFi.hostname().c_str(),   buf, "hostname");
+    mqttPubRet(WiFi.macAddress().c_str(), buf, "mac");
+    mqttPubRet(WiFi.SSID().c_str(),       buf, "ssid");
+    mqttPubRet(WiFi.RSSI(),               buf, "rssi");
+    // Buffer for IPs
+    char ipbuf[16] = "";
+    charIP(WiFi.localIP(),   ipbuf, sizeof(ipbuf));
+    mqttPubRet(ipbuf, buf, "ip");
+    charIP(WiFi.gatewayIP(), ipbuf, sizeof(ipbuf));
+    mqttPubRet(ipbuf, buf, "gw");
+    // Subscribe to command topic
+    mqttSubscribe(mqttTopicCmd, nodename, true);
+#ifdef DEBUG
+    Serial.print(F("MQTT connected to "));
+    Serial.print(mqttServer);
+    Serial.print(F(" port "));
+    Serial.print(mqttPort);
+    Serial.println(F("."));
+#endif
+  }
+  yield();
+  return mqttClient.connected();
+}
+
+/**
+  Message arrived in MQTT subscribed topics
+
+  @param topic the topic the message arrived on (const char[])
+  @param payload the message payload (byte array)
+  @param length the length of the message payload (unsigned int)
+*/
+void mqttCallback(char *topic, byte *payload, unsigned int length) {
+  // Make a limited copy of the payload and make sure it ends with \0
+  char message[100] = "";
+  if (length > 100) length = 100;
+  memcpy(message, payload, length);
+  message[length] = '\0';
+#ifdef DEBUG
+  Serial.printf("MQTT %s: %s\r\n", topic, message);
+#endif
+  // Decompose the topic
+  char *pRoot = NULL, *pTrunk = NULL, *pBranch = NULL;
+  if (pRoot = strtok(topic, "/"))
+    if (pTrunk = strtok(NULL, "/"))
+      if (pBranch = strtok(NULL, "/"))
+        // Dispatcher
+        if (strcmp(pRoot, mqttTopicCmd) == 0)
+          if (strcmp(pTrunk, nodename) == 0)
+            if (strcmp(pBranch, "restart") == 0)
+              // Restart
+              ESP.restart();
+            else if (strcmp(pBranch, "mode") == 0)
+              // Set the display mode
+              scrCurrent = atoi(message) % SCR_ALL;
+            else if (strcmp(pBranch, "bright") == 0)
+              // Set the brightness
+              led.intensity(atoi(message));
 }
 
 /**
@@ -162,7 +352,6 @@ void wifiConnect(int timeout = 300) {
 */
 bool dsRead() {
   static uint32_t nextTime = 0;
-
   if (millis() >= nextTime) {
     dsOK = false;
     if (sensors.isConnected(dsAddr)) {
@@ -236,8 +425,6 @@ bool showHHMMTT() {
     datetime_t dt = ntp.getDateTime(utm);
     // Check if the time is accurate, flash the separator if so
     uint8_t DOT = ((ntp.isAccurate() and (dt.ss & 0x01)) == true) ? 0x00 : LED_DP;
-    // Read the temperature
-    dsOK = dsRead();
     // Display "HH.MM TTc" or "--.-- -- "
     uint8_t msg[] = {ntpOK ? (dt.hh / 10) : CHR_M,                                                  // tenths of hours
                      ntpOK ? (dt.hh % 10 + DOT) : (CHR_M + DOT),                                    // units of hours
@@ -384,7 +571,7 @@ bool showVcc() {
 void setup() {
 #ifdef DEBUG
   // Init the serial com
-  Serial.begin(115200);
+  Serial.begin(115200, SERIAL_8N1, SERIAL_TX_ONLY);
   Serial.println();
   Serial.print(NODENAME);
   Serial.print(" ");
@@ -394,8 +581,13 @@ void setup() {
 #endif
 
   // Initialize the LEDs
+#ifdef DEBUG
+  // For NodeMCU: DIN GPIO4, CLK GPIO5, LOAD GPIO16
+  led.init(4, 5, 16, 8);
+#else
   // For ESP8266-01: DIN GPIO1 (TXD), CLK GPIO0, LOAD GPIO2
   led.init(1, 0, 2, 8);
+#endif
   // Disable the display test
   led.displaytest(false);
   // Decode nothing
@@ -429,10 +621,19 @@ void setup() {
   // Try to connect to WiFi
   while (!WiFi.isConnected()) wifiConnect();
 
+  // MQTT
+#ifdef USE_MQTT_SSL
+  wifiClient.setInsecure();
+#endif
+  mqttClient.setServer(mqttServer, mqttPort);
+  mqttClient.setCallback(mqttCallback);
+
   // OTA Update
   ArduinoOTA.setPort(otaPort);
   ArduinoOTA.setHostname(NODENAME);
-  // ArduinoOTA.setPassword((const char *)"123");
+#ifdef OTA_PASS
+  ArduinoOTA.setPassword((const char *)OTA_PASS);
+#endif
 
   ArduinoOTA.onStart([]() {
     // Restart the progress
@@ -479,16 +680,11 @@ void setup() {
     led.fbDisplay();
 #ifdef DEBUG
     Serial.printf("Error[%u]: ", error);
-    if (error == OTA_AUTH_ERROR)
-      Serial.println(F("Auth Failed"));
-    else if (error == OTA_BEGIN_ERROR)
-      Serial.println(F("Begin Failed"));
-    else if (error == OTA_CONNECT_ERROR)
-      Serial.println(F("Connect Failed"));
-    else if (error == OTA_RECEIVE_ERROR)
-      Serial.println(F("Receive Failed"));
-    else if (error == OTA_END_ERROR)
-      Serial.println(F("End Failed"));
+    if      (error == OTA_AUTH_ERROR)     Serial.print(F("Auth Failed\r\n"));
+    else if (error == OTA_BEGIN_ERROR)    Serial.print(F("Begin Failed\r\n"));
+    else if (error == OTA_CONNECT_ERROR)  Serial.print(F("Connect Failed\r\n"));
+    else if (error == OTA_RECEIVE_ERROR)  Serial.print(F("Receive Failed\r\n"));
+    else if (error == OTA_END_ERROR)      Serial.print(F("End Failed\r\n"));
 #endif
   });
 
@@ -518,6 +714,9 @@ void setup() {
   delay(500);
   // Power on the display
   led.shutdown(false);
+
+  // Start the sensor timer
+  snsNextTime = millis();
 }
 
 /**
@@ -527,6 +726,51 @@ void loop() {
   // Handle OTA
   ArduinoOTA.handle();
   yield();
+
+  // Process incoming MQTT messages and maintain connection
+  if (!mqttClient.loop())
+    // Not connected, check if it's time to try to reconnect
+    if (millis() >= mqttNextTime)
+      // Try to reconnect every mqttDelay seconds
+      if (!mqttReconnect()) mqttNextTime = millis() + mqttDelay;
+  yield();
+
+  // Read the temperature
+  dsOK = dsRead();
+
+  // Read the other sensors and publish telemetry
+  if (millis() >= snsNextTime) {
+    // Repeat sensor reading after the delay
+    snsNextTime += snsDelay;
+    // Report the temperature
+    if (dsOK)
+      mqttPubRet(dsVal, mqttTopicSns, "temperature");
+    // Free Heap
+    int heap = ESP.getFreeHeap();
+    // Read the Vcc (mV) and add to the round median filter
+    int vcc  = ESP.getVcc();
+    // Get RSSI
+    int rssi = WiFi.RSSI();
+    // Create the reporting topic
+    char topic[32] = "";
+    char text[32] = "";
+    strncpy(topic, mqttTopicRpt, sizeof(topic));
+    strcat(topic, "/");
+    strcat(topic, nodename);
+    // Uptime in seconds and text
+    unsigned long ups = 0;
+    char upt[32] = "";
+    ups = ntp.getUptime(upt, sizeof(upt));
+    mqttPubRet(ups, topic, "uptime");
+    mqttPubRet(upt, topic, "uptime", "text");
+    // Free heap
+    mqttPubRet(heap, topic, "heap");
+    // Power supply
+    snprintf(text, sizeof(text), "%d.%d", vcc / 1000, vcc % 1000);
+    mqttPubRet(text, topic, "vcc");
+    // Add the WiFi topic and publish the RSSI value
+    mqttPubRet(rssi, topic, "wifi", "rssi");
+  }
 
   // Choose the screen to display
   switch (scrCurrent) {
